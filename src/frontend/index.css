@@ -1,0 +1,170 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Mona Sans";
+  src: url("/assets/fonts/MonaSans.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("/assets/fonts/BricolageGrotesque.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+    /* Pure dark TikTok-inspired palette */
+    --background: 0 0 0;
+    --foreground: 1 0 0;
+    --card: 0.08 0 0;
+    --card-foreground: 1 0 0;
+    --popover: 0.1 0 0;
+    --popover-foreground: 1 0 0;
+    --primary: 0.65 0.28 15;
+    --primary-foreground: 1 0 0;
+    --secondary: 0.15 0 0;
+    --secondary-foreground: 0.9 0 0;
+    --muted: 0.12 0 0;
+    --muted-foreground: 0.6 0 0;
+    --accent: 0.65 0.28 15;
+    --accent-foreground: 1 0 0;
+    --destructive: 0.55 0.22 27;
+    --destructive-foreground: 1 0 0;
+    --border: 0.25 0 0;
+    --input: 0.18 0 0;
+    --ring: 0.65 0.28 15;
+    /* Hot pink accent */
+    --pink: 0.65 0.28 350;
+    --pink-foreground: 1 0 0;
+    /* Coin gold */
+    --gold: 0.75 0.18 80;
+    /* Chart */
+    --chart-1: 0.65 0.28 15;
+    --chart-2: 0.65 0.28 350;
+    --chart-3: 0.75 0.18 80;
+    --chart-4: 0.6 0.15 200;
+    --chart-5: 0.7 0.2 130;
+    --sidebar: 0.08 0 0;
+    --sidebar-foreground: 0.9 0 0;
+    --sidebar-primary: 0.65 0.28 15;
+    --sidebar-primary-foreground: 1 0 0;
+    --sidebar-accent: 0.15 0 0;
+    --sidebar-accent-foreground: 0.9 0 0;
+    --sidebar-border: 0.2 0 0;
+    --sidebar-ring: 0.65 0.28 15;
+  }
+
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Mona Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  /* Feed scroll container */
+  .feed-container {
+    scroll-snap-type: y mandatory;
+    overflow-y: scroll;
+    height: 100%;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .feed-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .reel-card {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  /* Phone frame on desktop */
+  .phone-frame {
+    max-width: 430px;
+    width: 100%;
+    margin: 0 auto;
+    position: relative;
+    height: 100dvh;
+    overflow: hidden;
+  }
+}
+
+@layer utilities {
+  .text-pink {
+    color: oklch(var(--pink));
+  }
+
+  .bg-pink {
+    background-color: oklch(var(--pink));
+  }
+
+  .text-gold {
+    color: oklch(var(--gold));
+  }
+
+  .bg-gold {
+    background-color: oklch(var(--gold));
+  }
+
+  .gradient-overlay {
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.85) 0%,
+      rgba(0, 0, 0, 0.4) 40%,
+      transparent 70%
+    );
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .heart-animation {
+    animation: heartbeat 0.3s ease-out;
+  }
+
+  @keyframes heartbeat {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.4); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-slide-up {
+    animation: fadeSlideUp 0.4s ease-out forwards;
+  }
+
+  @keyframes coinBounce {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-8px) rotate(-10deg); }
+    75% { transform: translateY(-4px) rotate(10deg); }
+  }
+
+  .coin-bounce {
+    animation: coinBounce 0.5s ease-out;
+  }
+}
