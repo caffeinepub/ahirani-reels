@@ -8,7 +8,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Heart, MessageCircle, Music, Send, Share2 } from "lucide-react";
+import { Heart, Lock, MessageCircle, Music, Send, Share2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -223,6 +223,10 @@ function ReelCard({
     video.commentsCount;
   const isLiked = state.likedVideoIds.includes(video.id);
 
+  const isPremiumLocked =
+    video.videoType === "premium" &&
+    state.currentUser?.subscriptionStatus !== "active";
+
   return (
     <div
       data-ocid={`feed.reel.item.${ocidIndex}`}
@@ -233,7 +237,8 @@ function ReelCard({
       <video
         ref={videoRef}
         src={video.url}
-        className="absolute inset-0 w-full h-full object-cover"
+        className={`absolute inset-0 w-full h-full object-cover ${isPremiumLocked ? "blur" : ""}`}
+        style={isPremiumLocked ? { filter: "blur(4px)" } : {}}
         muted
         loop
         playsInline
@@ -243,6 +248,23 @@ function ReelCard({
 
       {/* Gradient overlay */}
       <div className="absolute inset-0 gradient-overlay" />
+
+      {/* Premium locked overlay */}
+      {isPremiumLocked && (
+        <div className="absolute inset-0 bg-black/60 z-10 flex flex-col items-center justify-center gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+            <Lock className="w-7 h-7 text-amber-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-amber-400 font-bold text-base tracking-wide uppercase text-xs mb-1">
+              Premium
+            </p>
+            <p className="text-white font-semibold text-sm">
+              Subscribe to watch
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Video type badge */}
       <div className="absolute top-4 left-3 z-10">

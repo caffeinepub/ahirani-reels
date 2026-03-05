@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   ArrowRight,
+  Clapperboard,
+  Eye,
   Gift,
   Phone,
   RotateCcw,
@@ -12,10 +14,10 @@ import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
-import type { User as UserType } from "../context/AppContext";
+import type { UserRole, User as UserType } from "../context/AppContext";
 import { generateId, generateReferralCode } from "../utils/trending";
 
-type Step = "phone" | "otp" | "username";
+type Step = "phone" | "otp" | "username" | "role";
 
 export default function AuthPage() {
   const { state, dispatch } = useApp();
@@ -24,6 +26,7 @@ export default function AuthPage() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [username, setUsername] = useState("");
   const [referralCode, setReferralCode] = useState("");
+  const [selectedRole, setSelectedRole] = useState<UserRole>("viewer");
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -74,7 +77,7 @@ export default function AuthPage() {
     }
   };
 
-  const handleCreateAccount = async () => {
+  const handleContinueToRole = () => {
     if (!username.trim()) {
       toast.error("Username is required");
       return;
@@ -90,7 +93,10 @@ export default function AuthPage() {
       toast.error("Username already taken");
       return;
     }
+    setStep("role");
+  };
 
+  const handleCreateAccount = async () => {
     setLoading(true);
     await new Promise((r) => setTimeout(r, 1000));
 
@@ -108,6 +114,10 @@ export default function AuthPage() {
       createdAt: Date.now(),
       totalLikes: 0,
       totalEarnings: 0,
+      pendingEarnings: 0,
+      role: selectedRole,
+      subscriptionStatus: "none",
+      subscriptionExpiry: 0,
     };
 
     dispatch({ type: "ADD_USER", user: newUser });
@@ -375,7 +385,153 @@ export default function AuthPage() {
               </div>
 
               <Button
-                data-ocid="auth.create_account_button"
+                data-ocid="auth.continue_to_role_button"
+                onClick={handleContinueToRole}
+                className="w-full h-12 font-semibold text-base"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  Continue <ArrowRight className="w-4 h-4" />
+                </span>
+              </Button>
+            </motion.div>
+          )}
+
+          {step === "role" && (
+            <motion.div
+              key="role"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              className="space-y-5"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-reels-pink" />
+                  <h2 className="text-xl font-semibold text-white">
+                    Choose your role
+                  </h2>
+                </div>
+                <p className="text-sm text-white/50">
+                  How do you plan to use Ahirani Reels?
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Viewer card */}
+                <button
+                  type="button"
+                  data-ocid="auth.role_viewer_button"
+                  onClick={() => setSelectedRole("viewer")}
+                  className={`relative flex flex-col items-center gap-3 rounded-2xl p-5 border-2 transition-all ${
+                    selectedRole === "viewer"
+                      ? "border-transparent"
+                      : "border-white/15 bg-white/5 hover:border-white/30"
+                  }`}
+                  style={
+                    selectedRole === "viewer"
+                      ? {
+                          background:
+                            "linear-gradient(135deg, oklch(0.65 0.28 15)/15%, oklch(0.65 0.28 350)/15%)",
+                          borderImage:
+                            "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350)) 1",
+                          border: "2px solid transparent",
+                          backgroundClip: "padding-box",
+                          outline: "2px solid oklch(0.65 0.28 15)",
+                          outlineOffset: "-2px",
+                        }
+                      : {}
+                  }
+                >
+                  <div
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                      selectedRole === "viewer"
+                        ? "bg-reels-pink/20"
+                        : "bg-white/10"
+                    }`}
+                  >
+                    <Eye
+                      className={`w-6 h-6 ${
+                        selectedRole === "viewer"
+                          ? "text-reels-pink"
+                          : "text-white/50"
+                      }`}
+                    />
+                  </div>
+                  <div className="text-center">
+                    <p
+                      className={`font-semibold text-sm ${
+                        selectedRole === "viewer"
+                          ? "text-white"
+                          : "text-white/70"
+                      }`}
+                    >
+                      Viewer
+                    </p>
+                    <p className="text-[11px] text-white/40 mt-0.5 leading-tight">
+                      Browse &amp; discover videos
+                    </p>
+                  </div>
+                </button>
+
+                {/* Artist card */}
+                <button
+                  type="button"
+                  data-ocid="auth.role_artist_button"
+                  onClick={() => setSelectedRole("artist")}
+                  className={`relative flex flex-col items-center gap-3 rounded-2xl p-5 border-2 transition-all ${
+                    selectedRole === "artist"
+                      ? "border-transparent"
+                      : "border-white/15 bg-white/5 hover:border-white/30"
+                  }`}
+                  style={
+                    selectedRole === "artist"
+                      ? {
+                          background:
+                            "linear-gradient(135deg, oklch(0.65 0.28 15)/15%, oklch(0.65 0.28 350)/15%)",
+                          outline: "2px solid oklch(0.65 0.28 15)",
+                          outlineOffset: "-2px",
+                        }
+                      : {}
+                  }
+                >
+                  <div
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                      selectedRole === "artist"
+                        ? "bg-reels-pink/20"
+                        : "bg-white/10"
+                    }`}
+                  >
+                    <Clapperboard
+                      className={`w-6 h-6 ${
+                        selectedRole === "artist"
+                          ? "text-reels-pink"
+                          : "text-white/50"
+                      }`}
+                    />
+                  </div>
+                  <div className="text-center">
+                    <p
+                      className={`font-semibold text-sm ${
+                        selectedRole === "artist"
+                          ? "text-white"
+                          : "text-white/70"
+                      }`}
+                    >
+                      Artist
+                    </p>
+                    <p className="text-[11px] text-white/40 mt-0.5 leading-tight">
+                      Upload, earn &amp; grow
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              <Button
+                data-ocid="auth.role_continue_button"
                 onClick={handleCreateAccount}
                 disabled={loading}
                 className="w-full h-12 font-semibold text-base"
@@ -390,9 +546,19 @@ export default function AuthPage() {
                     Creating Account...
                   </span>
                 ) : (
-                  "Create Account 🎉"
+                  <span className="flex items-center gap-2">
+                    Continue <ArrowRight className="w-4 h-4" />
+                  </span>
                 )}
               </Button>
+
+              <button
+                type="button"
+                onClick={() => setStep("username")}
+                className="text-sm text-white/40 w-full text-center"
+              >
+                ← Back
+              </button>
             </motion.div>
           )}
         </AnimatePresence>

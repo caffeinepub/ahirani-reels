@@ -11,10 +11,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   Camera,
+  Clapperboard,
   Edit2,
+  Eye,
   Grid2X2,
   Heart,
   Settings,
+  Shield,
   Users,
   X,
 } from "lucide-react";
@@ -22,7 +25,66 @@ import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
+import type { SubscriptionStatus, UserRole } from "../context/AppContext";
 import { formatCount } from "../utils/trending";
+
+// ─── Role Badge ───────────────────────────────────────────────────────────────
+
+function RoleBadge({ role }: { role: UserRole }) {
+  const config = {
+    viewer: {
+      className: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
+      icon: <Eye className="w-3 h-3" />,
+      label: "Viewer",
+    },
+    artist: {
+      className: "bg-reels-pink/20 text-reels-pink border border-reels-pink/30",
+      icon: <Clapperboard className="w-3 h-3" />,
+      label: "Artist",
+    },
+    admin: {
+      className: "bg-purple-500/20 text-purple-400 border border-purple-500/30",
+      icon: <Shield className="w-3 h-3" />,
+      label: "Admin",
+    },
+  };
+  const { className, icon, label } = config[role] ?? config.viewer;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${className}`}
+    >
+      {icon}
+      {label}
+    </span>
+  );
+}
+
+// ─── Subscription Badge ───────────────────────────────────────────────────────
+
+function SubscriptionBadge({ status }: { status: SubscriptionStatus }) {
+  const config = {
+    active: {
+      className: "bg-green-500/20 text-green-400 border border-green-500/30",
+      label: "Active",
+    },
+    expired: {
+      className: "bg-red-500/20 text-red-400 border border-red-500/30",
+      label: "Expired",
+    },
+    none: {
+      className: "bg-white/10 text-white/40 border border-white/10",
+      label: "No Sub",
+    },
+  };
+  const { className, label } = config[status] ?? config.none;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
 
 // ─── Edit Profile Sheet ───────────────────────────────────────────────────────
 
@@ -243,12 +305,26 @@ export default function ProfilePage() {
               <h2 className="text-white font-bold text-xl truncate">
                 @{currentUserData.username}
               </h2>
+              {/* Role + Subscription badges */}
+              <div
+                data-ocid="profile.role.panel"
+                className="flex items-center gap-1.5 mt-1.5 flex-wrap"
+              >
+                <RoleBadge role={currentUserData.role ?? "viewer"} />
+                <span data-ocid="profile.subscription.panel">
+                  <SubscriptionBadge
+                    status={currentUserData.subscriptionStatus ?? "none"}
+                  />
+                </span>
+              </div>
               {currentUserData.bio ? (
-                <p className="text-white/60 text-sm mt-1 leading-relaxed">
+                <p className="text-white/60 text-sm mt-1.5 leading-relaxed">
                   {currentUserData.bio}
                 </p>
               ) : (
-                <p className="text-white/30 text-sm mt-1 italic">No bio yet</p>
+                <p className="text-white/30 text-sm mt-1.5 italic">
+                  No bio yet
+                </p>
               )}
             </div>
           </div>

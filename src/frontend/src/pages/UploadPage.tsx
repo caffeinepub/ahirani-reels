@@ -2,7 +2,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Film, Hash, Loader2, Type, Upload, X } from "lucide-react";
+import {
+  Crown,
+  Film,
+  Hash,
+  Loader2,
+  Lock,
+  Type,
+  Upload,
+  X,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -47,6 +56,9 @@ const VIDEO_TYPES: Array<{
 export default function UploadPage() {
   const { state, dispatch } = useApp();
   const { actor } = useActor();
+  const user = state.currentUser;
+  const canUpload =
+    user?.role === "artist" && user?.subscriptionStatus === "active";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>("");
@@ -165,6 +177,70 @@ export default function UploadPage() {
     setVideoFile(null);
     setVideoUrl("");
   };
+
+  // Locked state for non-artists or artists without active subscription
+  if (!canUpload) {
+    return (
+      <div className="h-full overflow-y-auto bg-background">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-white/10 px-4 py-4">
+          <h1 className="font-display text-xl font-bold text-white">
+            Upload Reel
+          </h1>
+          <p className="text-white/40 text-xs mt-0.5">
+            Share your moment with the world
+          </p>
+        </div>
+        <div
+          data-ocid="upload.locked.panel"
+          className="flex flex-col items-center justify-center px-6 py-20"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-sm"
+          >
+            <div
+              className="rounded-2xl border border-white/10 p-8 flex flex-col items-center text-center gap-4"
+              style={{ background: "rgba(255,255,255,0.04)" }}
+            >
+              {user?.role !== "artist" ? (
+                <>
+                  <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
+                    <Lock className="w-8 h-8 text-white/50" />
+                  </div>
+                  <div>
+                    <h2 className="text-white font-bold text-lg mb-2">
+                      Artist Account Required
+                    </h2>
+                    <p className="text-white/50 text-sm leading-relaxed">
+                      Only artist accounts can upload videos. Contact admin to
+                      upgrade your account.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                    <Crown className="w-8 h-8 text-amber-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-white font-bold text-lg mb-2">
+                      Subscription Required
+                    </h2>
+                    <p className="text-white/50 text-sm leading-relaxed">
+                      Your subscription has expired or is inactive. Contact
+                      admin to renew.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto bg-background">

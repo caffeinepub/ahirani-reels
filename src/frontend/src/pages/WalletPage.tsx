@@ -1,21 +1,24 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Check,
   Copy,
-  DollarSign,
   Gift,
+  IndianRupee,
   Play,
   Share2,
   TrendingUp,
   Users,
+  Wallet,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { RewardedAd } from "../components/ads/RewardedAd";
-import type { VideoType } from "../context/AppContext";
+import type { VideoType, WithdrawalRequest } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
 import { formatCount, formatTime } from "../utils/trending";
 
@@ -47,6 +50,29 @@ function VideoTypeBadge({ type }: { type: VideoType }) {
   );
 }
 
+// ─── Withdrawal status badge ──────────────────────────────────────────────────
+
+function WithdrawalStatusBadge({
+  status,
+}: {
+  status: WithdrawalRequest["status"];
+}) {
+  const config: Record<WithdrawalRequest["status"], string> = {
+    pending: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    approved: "bg-green-500/20 text-green-400 border-green-500/30",
+    rejected: "bg-red-500/20 text-red-400 border-red-500/30",
+    paid: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  };
+  return (
+    <Badge
+      variant="secondary"
+      className={`text-[10px] px-1.5 py-0 capitalize ${config[status]}`}
+    >
+      {status}
+    </Badge>
+  );
+}
+
 // ─── Wallet Page ──────────────────────────────────────────────────────────────
 
 export default function WalletPage() {
@@ -55,7 +81,14 @@ export default function WalletPage() {
   const [copied, setCopied] = useState(false);
   const [adOpen, setAdOpen] = useState(false);
 
+  // Withdrawal form state
+  const [upiId, setUpiId] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+
   if (!user) return null;
+
+  const liveUser = state.users.find((u) => u.id === user.id) ?? user;
 
   const myReferrals = state.referrals.filter((r) => r.referrerId === user.id);
   const totalReferralCoins = myReferrals.reduce(
@@ -74,6 +107,12 @@ export default function WalletPage() {
     const gross = (v.viewsCount * rate) / 1000;
     return sum + gross * 0.6;
   }, 0);
+
+  const pendingEarnings = liveUser.pendingEarnings ?? 0;
+
+  const myWithdrawals = state.withdrawalRequests.filter(
+    (w) => w.userId === user.id,
+  );
 
   const handleCopyCode = async () => {
     try {
@@ -102,6 +141,48 @@ export default function WalletPage() {
 
   const handleEarnCoins = () => {
     dispatch({ type: "ADD_COINS", userId: user.id, amount: 5 });
+  };
+
+  const handleWithdraw = async () => {
+    const amount = Number.parseFloat(withdrawAmount);
+
+    if (!upiId.trim()) {
+      toast.error("Please enter your UPI ID");
+      return;
+    }
+    if (!withdrawAmount || Number.isNaN(amount) || amount < 200) {
+      toast.error("Minimum withdrawal amount is ₹200");
+      return;
+    }
+    if (amount > pendingEarnings) {
+      toast.error(
+        `Insufficient balance. Available: ₹${pendingEarnings.toFixed(2)}`,
+      );
+      return;
+    }
+
+    setWithdrawLoading(true);
+    await new Promise((r) => setTimeout(r, 800));
+
+    const request: WithdrawalRequest = {
+      id: `w${Date.now()}`,
+      userId: user.id,
+      upiId: upiId.trim(),
+      amount,
+      status: "pending",
+      createdAt: Date.now(),
+      resolvedAt: 0,
+      processedAt: 0,
+    };
+
+    dispatch({ type: "REQUEST_WITHDRAWAL", request });
+    setUpiId("");
+    setWithdrawAmount("");
+    setWithdrawLoading(false);
+
+    toast.success("Withdrawal request submitted!", {
+      description: `₹${amount.toFixed(2)} to ${upiId.trim()} — pending admin approval`,
+    });
   };
 
   return (
@@ -156,8 +237,7 @@ export default function WalletPage() {
               </p>
               <div className="flex items-baseline gap-3">
                 <span className="text-5xl font-bold font-display text-gold">
-                  {state.users.find((u) => u.id === user.id)?.coins ??
-                    user.coins}
+                  {liveUser.coins}
                 </span>
                 <span className="text-gold/70 text-lg font-semibold">
                   coins
@@ -198,7 +278,7 @@ export default function WalletPage() {
                   {user.referralCode}
                 </p>
                 <p className="text-white/40 text-xs mt-2">
-                  Share this code · Earn 10 coins per signup
+                  Share this code · Earn ₹10 per signup
                 </p>
               </div>
 
@@ -343,7 +423,7 @@ export default function WalletPage() {
 
           {/* ── Earnings Tab ────────────────────────────────────────────────── */}
           <TabsContent value="earnings" className="space-y-5 mt-0">
-            {/* Summary card */}
+            {/* Pending earnings balance card */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -358,13 +438,16 @@ export default function WalletPage() {
                 💰
               </div>
               <div className="flex items-center gap-2 mb-3">
-                <DollarSign className="w-4 h-4 text-emerald-400" />
+                <IndianRupee className="w-4 h-4 text-emerald-400" />
                 <p className="text-white/60 text-sm font-medium">
-                  Total Earned (USD)
+                  Available Balance (₹)
                 </p>
               </div>
-              <p className="text-4xl font-bold font-display text-emerald-400 mb-4">
-                ${totalEarned.toFixed(2)}
+              <p className="text-4xl font-bold font-display text-emerald-400 mb-1">
+                ₹{pendingEarnings.toFixed(2)}
+              </p>
+              <p className="text-white/40 text-xs mb-4">
+                Total earned: ₹{totalEarned.toFixed(2)}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white/10 rounded-xl p-3 text-center">
@@ -378,11 +461,148 @@ export default function WalletPage() {
               </div>
             </motion.div>
 
-            {/* Per-video earnings */}
+            {/* Withdrawal form */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
+              className="rounded-2xl border border-white/10 bg-card p-5 space-y-4"
+            >
+              <div className="flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold">Request Withdrawal</h3>
+              </div>
+              <p className="text-white/40 text-xs -mt-1">
+                Minimum ₹200 · Processed within 2-3 business days
+              </p>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="upi-id"
+                    className="text-white/70 text-xs font-medium"
+                  >
+                    UPI ID
+                  </Label>
+                  <Input
+                    id="upi-id"
+                    data-ocid="wallet.upi_input"
+                    placeholder="yourname@upi"
+                    value={upiId}
+                    onChange={(e) => setUpiId(e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="withdraw-amount"
+                    className="text-white/70 text-xs font-medium"
+                  >
+                    Amount (₹)
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-sm font-medium">
+                      ₹
+                    </span>
+                    <Input
+                      id="withdraw-amount"
+                      data-ocid="wallet.amount_input"
+                      type="number"
+                      min={200}
+                      step={1}
+                      placeholder="200"
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value)}
+                      className="pl-7 bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                    />
+                  </div>
+                  <p className="text-white/30 text-[10px]">
+                    Available: ₹{pendingEarnings.toFixed(2)} · Min: ₹200
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                data-ocid="wallet.withdraw_button"
+                onClick={handleWithdraw}
+                disabled={withdrawLoading}
+                className="w-full h-11 font-semibold"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.5 0.18 160), oklch(0.45 0.14 160))",
+                }}
+              >
+                {withdrawLoading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Submitting...
+                  </span>
+                ) : (
+                  <>
+                    <IndianRupee className="w-4 h-4 mr-1.5" />
+                    Request Withdrawal
+                  </>
+                )}
+              </Button>
+            </motion.div>
+
+            {/* Withdrawal history */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="rounded-2xl border border-white/10 bg-card overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-white/10">
+                <h3 className="text-white font-semibold text-sm">
+                  Withdrawal History
+                </h3>
+              </div>
+
+              {myWithdrawals.length === 0 ? (
+                <div
+                  data-ocid="wallet.withdrawals.empty_state"
+                  className="py-10 text-center"
+                >
+                  <p className="text-3xl mb-2">💸</p>
+                  <p className="text-white/40 text-sm">
+                    No withdrawal requests yet
+                  </p>
+                  <p className="text-white/30 text-xs mt-1">
+                    Your requests will appear here
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {myWithdrawals.map((w, i) => (
+                    <div
+                      key={w.id}
+                      data-ocid={`wallet.withdrawal.item.${i + 1}`}
+                      className="px-4 py-3 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-medium">
+                          ₹{w.amount.toFixed(2)}
+                        </p>
+                        <p className="text-white/40 text-xs truncate">
+                          {w.upiId}
+                        </p>
+                        <p className="text-white/30 text-[10px] mt-0.5">
+                          {formatTime(w.createdAt)} ago
+                        </p>
+                      </div>
+                      <WithdrawalStatusBadge status={w.status} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+
+            {/* Per-video earnings */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
               className="rounded-2xl border border-white/10 bg-card overflow-hidden"
             >
               <div className="px-4 py-3 border-b border-white/10">
@@ -427,10 +647,10 @@ export default function WalletPage() {
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-white/60 text-[10px]">
-                            Gross: ${gross.toFixed(2)}
+                            Gross: ₹{gross.toFixed(2)}
                           </p>
                           <p className="text-emerald-400 font-bold text-sm">
-                            ${artistEarn.toFixed(2)}
+                            ₹{artistEarn.toFixed(2)}
                           </p>
                         </div>
                       </div>
@@ -444,7 +664,7 @@ export default function WalletPage() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+              transition={{ delay: 0.4 }}
               className="rounded-2xl border border-white/10 bg-card p-4"
             >
               <p className="text-white/50 text-xs mb-3 font-medium">
@@ -458,7 +678,7 @@ export default function WalletPage() {
                   >
                     <VideoTypeBadge type={t} />
                     <p className="text-white font-bold text-sm mt-1.5">
-                      ${rpm[t].toFixed(2)}
+                      ₹{rpm[t].toFixed(2)}
                     </p>
                   </div>
                 ))}

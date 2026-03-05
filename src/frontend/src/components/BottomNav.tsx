@@ -1,11 +1,17 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Home, PlusSquare, User, Wallet } from "lucide-react";
 import { motion } from "motion/react";
-import { useBackendConnected } from "../context/AppContext";
+import { useApp, useBackendConnected } from "../context/AppContext";
 
-const NAV_ITEMS = [
+const ALL_NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home", ocid: "nav.home_link" },
-  { to: "/upload", icon: PlusSquare, label: "Upload", ocid: "nav.upload_link" },
+  {
+    to: "/upload",
+    icon: PlusSquare,
+    label: "Upload",
+    ocid: "nav.upload_link",
+    artistOnly: true,
+  },
   { to: "/wallet", icon: Wallet, label: "Wallet", ocid: "nav.wallet_link" },
   { to: "/profile", icon: User, label: "Profile", ocid: "nav.profile_link" },
 ] as const;
@@ -14,6 +20,15 @@ export default function BottomNav() {
   const routerState = useRouterState();
   const pathname = routerState.location.pathname;
   const isConnected = useBackendConnected();
+  const { state } = useApp();
+  const currentUser = state.currentUser;
+
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => {
+    if ("artistOnly" in item && item.artistOnly) {
+      return currentUser?.role !== "viewer";
+    }
+    return true;
+  });
 
   return (
     <nav

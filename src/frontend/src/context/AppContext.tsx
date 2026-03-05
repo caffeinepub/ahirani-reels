@@ -11,6 +11,9 @@ import { useActor } from "../hooks/useActor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export type UserRole = "viewer" | "artist" | "admin";
+export type SubscriptionStatus = "active" | "expired" | "none";
+
 export interface AdRpmConfig {
   reel: number; // default 2.00
   long: number; // default 4.00
@@ -18,6 +21,17 @@ export interface AdRpmConfig {
 }
 
 export type VideoType = "reel" | "long" | "premium";
+
+export interface WithdrawalRequest {
+  id: string;
+  userId: string;
+  upiId: string;
+  amount: number; // in ₹
+  status: "pending" | "approved" | "rejected" | "paid";
+  createdAt: number;
+  resolvedAt: number; // 0 if not resolved; set on approve/reject
+  processedAt: number; // 0 if not processed; set on approve, updated on paid
+}
 
 export interface User {
   id: string;
@@ -32,7 +46,11 @@ export interface User {
   isBlocked: boolean;
   createdAt: number;
   totalLikes: number;
-  totalEarnings: number; // cumulative artist USD earnings
+  totalEarnings: number; // cumulative artist USD earnings (legacy)
+  pendingEarnings: number; // ₹ balance available for withdrawal
+  role: UserRole;
+  subscriptionStatus: SubscriptionStatus;
+  subscriptionExpiry: number; // Unix ms timestamp, 0 if none
 }
 
 export interface Video {
@@ -75,6 +93,7 @@ export interface AppState {
   likedVideoIds: string[];
   referrals: Referral[];
   rpmConfig: AdRpmConfig;
+  withdrawalRequests: WithdrawalRequest[];
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -92,9 +111,26 @@ type Action =
   | { type: "DELETE_VIDEO"; videoId: string }
   | { type: "ADD_COINS"; userId: string; amount: number }
   | { type: "TRACK_SEEN"; videoId: string }
+  | { type: "TRACK_VIEW"; videoId: string; userId: string }
   | { type: "ADD_USER"; user: User }
   | { type: "ADD_REFERRAL"; referral: Referral }
-  | { type: "SET_RPM"; config: AdRpmConfig };
+  | { type: "SET_RPM"; config: AdRpmConfig }
+  | { type: "REQUEST_WITHDRAWAL"; request: WithdrawalRequest }
+  | { type: "APPROVE_WITHDRAWAL"; requestId: string }
+  | { type: "REJECT_WITHDRAWAL"; requestId: string }
+  | { type: "MARK_PAID"; requestId: string }
+  | { type: "ADD_EARNINGS"; userId: string; amount: number }
+  | {
+      type: "SET_USER_ROLE";
+      userId: string;
+      role: UserRole;
+    }
+  | {
+      type: "SET_SUBSCRIPTION";
+      userId: string;
+      status: SubscriptionStatus;
+      expiry: number;
+    };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -254,6 +290,11 @@ function calcSeedEarnings(userId: string): number {
   }, 0);
 }
 
+// Calculate pendingEarnings (₹) for seeded users (same formula as totalEarnings)
+function calcSeedPendingEarnings(userId: string): number {
+  return calcSeedEarnings(userId);
+}
+
 const MOCK_USERS: User[] = [
   {
     id: "u1",
@@ -270,6 +311,10 @@ const MOCK_USERS: User[] = [
     createdAt: Date.now() - 86400000 * 30,
     totalLikes: 45000,
     totalEarnings: calcSeedEarnings("u1"),
+    pendingEarnings: calcSeedPendingEarnings("u1"),
+    role: "artist",
+    subscriptionStatus: "active",
+    subscriptionExpiry: Date.now() + 86400000 * 30,
   },
   {
     id: "u2",
@@ -286,6 +331,10 @@ const MOCK_USERS: User[] = [
     createdAt: Date.now() - 86400000 * 20,
     totalLikes: 23000,
     totalEarnings: calcSeedEarnings("u2"),
+    pendingEarnings: calcSeedPendingEarnings("u2"),
+    role: "artist",
+    subscriptionStatus: "active",
+    subscriptionExpiry: Date.now() + 86400000 * 30,
   },
   {
     id: "u3",
@@ -302,6 +351,10 @@ const MOCK_USERS: User[] = [
     createdAt: Date.now() - 86400000 * 15,
     totalLikes: 18000,
     totalEarnings: calcSeedEarnings("u3"),
+    pendingEarnings: calcSeedPendingEarnings("u3"),
+    role: "viewer",
+    subscriptionStatus: "none",
+    subscriptionExpiry: 0,
   },
   {
     id: "u4",
@@ -318,6 +371,10 @@ const MOCK_USERS: User[] = [
     createdAt: Date.now() - 86400000 * 45,
     totalLikes: 89000,
     totalEarnings: calcSeedEarnings("u4"),
+    pendingEarnings: calcSeedPendingEarnings("u4"),
+    role: "artist",
+    subscriptionStatus: "expired",
+    subscriptionExpiry: Date.now() - 86400000 * 5,
   },
 ];
 
@@ -383,6 +440,49 @@ const MOCK_REFERRALS: Referral[] = [
   },
 ];
 
+const MOCK_WITHDRAWALS: WithdrawalRequest[] = [
+  {
+    id: "w1",
+    userId: "u4",
+    upiId: "arjun@upi",
+    amount: 500,
+    status: "paid",
+    createdAt: Date.now() - 86400000 * 10,
+    resolvedAt: Date.now() - 86400000 * 9,
+    processedAt: Date.now() - 86400000 * 8,
+  },
+  {
+    id: "w2",
+    userId: "u2",
+    upiId: "rahul.comedy@paytm",
+    amount: 300,
+    status: "pending",
+    createdAt: Date.now() - 86400000 * 2,
+    resolvedAt: 0,
+    processedAt: 0,
+  },
+  {
+    id: "w3",
+    userId: "u3",
+    upiId: "neha.vlogs@gpay",
+    amount: 200,
+    status: "rejected",
+    createdAt: Date.now() - 86400000 * 7,
+    resolvedAt: Date.now() - 86400000 * 6,
+    processedAt: 0,
+  },
+  {
+    id: "w4",
+    userId: "u1",
+    upiId: "priya.dance@phonepe",
+    amount: 400,
+    status: "approved",
+    createdAt: Date.now() - 86400000 * 3,
+    resolvedAt: Date.now() - 86400000 * 2,
+    processedAt: Date.now() - 86400000 * 2,
+  },
+];
+
 // ─── Initial State ────────────────────────────────────────────────────────────
 
 function getInitialState(): AppState {
@@ -399,7 +499,7 @@ function getInitialState(): AppState {
           viewsCount: v.viewsCount ?? seedCfg?.viewsCount ?? 0,
         };
       });
-      // Migration: ensure all users have totalEarnings
+      // Migration: ensure all users have totalEarnings, pendingEarnings, role, and subscription
       const migratedUsers = parsed.users.map((u) => ({
         ...u,
         totalEarnings:
@@ -409,12 +509,23 @@ function getInitialState(): AppState {
             migratedVideos,
             parsed.rpmConfig ?? DEFAULT_RPM,
           ),
+        pendingEarnings: u.pendingEarnings ?? 0,
+        role: u.role ?? ("viewer" as UserRole),
+        subscriptionStatus:
+          u.subscriptionStatus ?? ("none" as SubscriptionStatus),
+        subscriptionExpiry: u.subscriptionExpiry ?? 0,
       }));
       return {
         ...parsed,
         videos: migratedVideos,
         users: migratedUsers,
         rpmConfig: parsed.rpmConfig ?? DEFAULT_RPM,
+        withdrawalRequests: (parsed.withdrawalRequests ?? []).map((w) => ({
+          ...w,
+          processedAt:
+            (w as WithdrawalRequest & { processedAt?: number }).processedAt ??
+            0,
+        })),
       };
     }
   } catch {
@@ -429,6 +540,7 @@ function getInitialState(): AppState {
     likedVideoIds: [],
     referrals: MOCK_REFERRALS,
     rpmConfig: DEFAULT_RPM,
+    withdrawalRequests: MOCK_WITHDRAWALS,
   };
 }
 
@@ -552,17 +664,20 @@ function reducer(state: AppState, action: Action): AppState {
       };
     }
 
-    case "TRACK_SEEN": {
-      if (state.seenVideoIds.includes(action.videoId)) return state;
-      const newSeen = [...state.seenVideoIds, action.videoId];
+    case "TRACK_SEEN":
+    case "TRACK_VIEW": {
+      const videoId =
+        action.type === "TRACK_VIEW" ? action.videoId : action.videoId;
+      if (state.seenVideoIds.includes(videoId)) return state;
+      const newSeen = [...state.seenVideoIds, videoId];
 
       // Increment viewsCount on the matching video
       const updatedVideos = state.videos.map((v) =>
-        v.id === action.videoId ? { ...v, viewsCount: v.viewsCount + 1 } : v,
+        v.id === videoId ? { ...v, viewsCount: v.viewsCount + 1 } : v,
       );
 
       // Find the updated video to recalculate earnings
-      const watchedVideo = updatedVideos.find((v) => v.id === action.videoId);
+      const watchedVideo = updatedVideos.find((v) => v.id === videoId);
 
       // Recalculate artist earnings delta for the uploader
       let updatedUsers = state.users;
@@ -578,7 +693,11 @@ function reducer(state: AppState, action: Action): AppState {
 
         updatedUsers = state.users.map((u) =>
           u.id === watchedVideo.uploaderId
-            ? { ...u, totalEarnings: (u.totalEarnings ?? 0) + delta }
+            ? {
+                ...u,
+                totalEarnings: (u.totalEarnings ?? 0) + delta,
+                pendingEarnings: (u.pendingEarnings ?? 0) + delta,
+              }
             : u,
         );
 
@@ -586,6 +705,7 @@ function reducer(state: AppState, action: Action): AppState {
           updatedCurrentUser = {
             ...state.currentUser,
             totalEarnings: (state.currentUser.totalEarnings ?? 0) + delta,
+            pendingEarnings: (state.currentUser.pendingEarnings ?? 0) + delta,
           };
         }
       }
@@ -611,19 +731,19 @@ function reducer(state: AppState, action: Action): AppState {
         referrals: [...state.referrals, action.referral],
       };
 
-    case "SET_RPM":
+    case "SET_RPM": {
+      const newUsers = state.users.map((u) => {
+        const newTotal = calcTotalEarningsForUser(
+          u.id,
+          state.videos,
+          action.config,
+        );
+        return { ...u, totalEarnings: newTotal };
+      });
       return {
         ...state,
         rpmConfig: action.config,
-        // Recalculate all user earnings with new RPM
-        users: state.users.map((u) => ({
-          ...u,
-          totalEarnings: calcTotalEarningsForUser(
-            u.id,
-            state.videos,
-            action.config,
-          ),
-        })),
+        users: newUsers,
         currentUser: state.currentUser
           ? {
               ...state.currentUser,
@@ -635,6 +755,161 @@ function reducer(state: AppState, action: Action): AppState {
             }
           : null,
       };
+    }
+
+    case "REQUEST_WITHDRAWAL": {
+      // Deduct amount from user's pendingEarnings
+      const updatedUsers = state.users.map((u) =>
+        u.id === action.request.userId
+          ? {
+              ...u,
+              pendingEarnings: Math.max(
+                0,
+                (u.pendingEarnings ?? 0) - action.request.amount,
+              ),
+            }
+          : u,
+      );
+      const updatedCurrentUser =
+        state.currentUser?.id === action.request.userId
+          ? {
+              ...state.currentUser,
+              pendingEarnings: Math.max(
+                0,
+                (state.currentUser.pendingEarnings ?? 0) -
+                  action.request.amount,
+              ),
+            }
+          : state.currentUser;
+      return {
+        ...state,
+        withdrawalRequests: [...state.withdrawalRequests, action.request],
+        users: updatedUsers,
+        currentUser: updatedCurrentUser,
+      };
+    }
+
+    case "APPROVE_WITHDRAWAL": {
+      const now = Date.now();
+      return {
+        ...state,
+        withdrawalRequests: state.withdrawalRequests.map((r) =>
+          r.id === action.requestId
+            ? { ...r, status: "approved", resolvedAt: now, processedAt: now }
+            : r,
+        ),
+      };
+    }
+
+    case "MARK_PAID": {
+      return {
+        ...state,
+        withdrawalRequests: state.withdrawalRequests.map((r) =>
+          r.id === action.requestId && r.status === "approved"
+            ? { ...r, status: "paid", processedAt: Date.now() }
+            : r,
+        ),
+      };
+    }
+
+    case "REJECT_WITHDRAWAL": {
+      const req = state.withdrawalRequests.find(
+        (r) => r.id === action.requestId,
+      );
+      // Refund amount back to user if found and still pending
+      let refundedUsers = state.users;
+      let refundedCurrentUser = state.currentUser;
+      if (req && req.status === "pending") {
+        refundedUsers = state.users.map((u) =>
+          u.id === req.userId
+            ? {
+                ...u,
+                pendingEarnings: (u.pendingEarnings ?? 0) + req.amount,
+              }
+            : u,
+        );
+        if (state.currentUser?.id === req.userId) {
+          refundedCurrentUser = {
+            ...state.currentUser,
+            pendingEarnings:
+              (state.currentUser.pendingEarnings ?? 0) + req.amount,
+          };
+        }
+      }
+      return {
+        ...state,
+        withdrawalRequests: state.withdrawalRequests.map((r) =>
+          r.id === action.requestId
+            ? { ...r, status: "rejected", resolvedAt: Date.now() }
+            : r,
+        ),
+        users: refundedUsers,
+        currentUser: refundedCurrentUser,
+      };
+    }
+
+    case "ADD_EARNINGS": {
+      const updatedUsers = state.users.map((u) =>
+        u.id === action.userId
+          ? {
+              ...u,
+              pendingEarnings: (u.pendingEarnings ?? 0) + action.amount,
+              totalEarnings: (u.totalEarnings ?? 0) + action.amount,
+            }
+          : u,
+      );
+      const updatedCurrentUser =
+        state.currentUser?.id === action.userId
+          ? {
+              ...state.currentUser,
+              pendingEarnings:
+                (state.currentUser.pendingEarnings ?? 0) + action.amount,
+              totalEarnings:
+                (state.currentUser.totalEarnings ?? 0) + action.amount,
+            }
+          : state.currentUser;
+      return {
+        ...state,
+        users: updatedUsers,
+        currentUser: updatedCurrentUser,
+      };
+    }
+
+    case "SET_USER_ROLE": {
+      return {
+        ...state,
+        users: state.users.map((u) =>
+          u.id === action.userId ? { ...u, role: action.role } : u,
+        ),
+        currentUser:
+          state.currentUser?.id === action.userId
+            ? { ...state.currentUser, role: action.role }
+            : state.currentUser,
+      };
+    }
+
+    case "SET_SUBSCRIPTION": {
+      return {
+        ...state,
+        users: state.users.map((u) =>
+          u.id === action.userId
+            ? {
+                ...u,
+                subscriptionStatus: action.status,
+                subscriptionExpiry: action.expiry,
+              }
+            : u,
+        ),
+        currentUser:
+          state.currentUser?.id === action.userId
+            ? {
+                ...state.currentUser,
+                subscriptionStatus: action.status,
+                subscriptionExpiry: action.expiry,
+              }
+            : state.currentUser,
+      };
+    }
 
     default:
       return state;
