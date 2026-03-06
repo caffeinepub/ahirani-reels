@@ -22,11 +22,11 @@ export function ShareSheet({
   onClose,
   onShare,
 }: ShareSheetProps) {
-  const url = `https://ahirani-reels.app/v/${videoId}`;
+  const url = `https://faktahirani.app/v/${videoId}`;
 
   const handleWhatsApp = () => {
     window.open(
-      `https://wa.me/?text=${encodeURIComponent(`Check out this reel on Ahirani Reels! ${url}`)}`,
+      `https://wa.me/?text=${encodeURIComponent(`फक्त अहिराणीवर हे रील पहा! ${url}`)}`,
       "_blank",
     );
   };
@@ -42,7 +42,7 @@ export function ShareSheet({
 
   const handleTelegram = () => {
     window.open(
-      `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent("Check out this reel on Ahirani Reels!")}`,
+      `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent("फक्त अहिराणीवर हे रील पहा!")}`,
       "_blank",
     );
   };

@@ -34,6 +34,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ArtistProfileSheet } from "../components/ArtistProfileSheet";
 import { ArtistSearchSheet } from "../components/ArtistSearchSheet";
 import CreatorBadge from "../components/CreatorBadge";
 import { ShareSheet } from "../components/ShareSheet";
@@ -206,6 +207,7 @@ function ReelCard({
   const [likePulse, setLikePulse] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const isFollowing = useIsFollowing(video.uploaderId);
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const ocidIndex = index + 1;
@@ -430,9 +432,14 @@ function ReelCard({
       {/* Bottom overlay */}
       <div className="absolute bottom-20 left-3 right-16 z-10">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <p className="text-white font-bold text-sm">
+          <button
+            type="button"
+            data-ocid={`feed.reel.username_button.${ocidIndex}`}
+            onClick={() => setProfileSheetOpen(true)}
+            className="text-white font-bold text-sm hover:underline focus:outline-none active:opacity-70 transition-opacity"
+          >
             @{uploader?.username ?? "user"}
-          </p>
+          </button>
           {uploader && (
             <CreatorBadge
               user={uploader}
@@ -495,6 +502,13 @@ function ReelCard({
           }
         }}
       />
+
+      {/* Artist profile sheet */}
+      <ArtistProfileSheet
+        artistId={video.uploaderId}
+        open={profileSheetOpen}
+        onClose={() => setProfileSheetOpen(false)}
+      />
     </div>
   );
 }
@@ -515,6 +529,7 @@ function VideoCard({
   const [commentOpen, setCommentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [likePulse, setLikePulse] = useState(false);
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const ocidIndex = index + 1;
 
   const isLocked =
@@ -621,9 +636,14 @@ function VideoCard({
                   {uploader?.username?.[0]?.toUpperCase() ?? "U"}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-white/70 text-xs font-medium truncate">
+              <button
+                type="button"
+                data-ocid={`feed.long.username_button.${ocidIndex}`}
+                onClick={() => setProfileSheetOpen(true)}
+                className="text-white/70 text-xs font-medium truncate hover:text-white/90 focus:outline-none transition-colors"
+              >
                 @{uploader?.username ?? "user"}
-              </span>
+              </button>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <VideoTypeBadge type={video.videoType ?? "reel"} />
@@ -777,6 +797,13 @@ function VideoCard({
           }
         }}
       />
+
+      {/* Artist profile sheet */}
+      <ArtistProfileSheet
+        artistId={video.uploaderId}
+        open={profileSheetOpen}
+        onClose={() => setProfileSheetOpen(false)}
+      />
     </motion.div>
   );
 }
@@ -824,7 +851,7 @@ function VideoListFeed({
 
 // ─── Feed Tab Types ───────────────────────────────────────────────────────────
 
-type FeedTab = "foryou" | "long" | "premium";
+type FeedTab = "foryou" | "long" | "premium" | "following";
 
 // ─── Feed Page ────────────────────────────────────────────────────────────────
 
@@ -851,6 +878,9 @@ export default function FeedPage() {
   const premiumVideos = state.videos.filter(
     (v) => !v.isDeleted && v.videoType === "premium",
   );
+  const followingFeed = state.videos
+    .filter((v) => !v.isDeleted && state.followingIds.includes(v.uploaderId))
+    .sort((a, b) => b.createdAt - a.createdAt);
   const localAds: LocalAd[] = state.localAds ?? [];
 
   const handleSeen = useCallback(
@@ -928,6 +958,7 @@ export default function FeedPage() {
   // Tab config
   const TABS: { id: FeedTab; label: string; ocid: string }[] = [
     { id: "foryou", label: "For You", ocid: "feed.foryou.tab" },
+    { id: "following", label: "Following", ocid: "feed.following.tab" },
     { id: "long", label: "Long", ocid: "feed.long.tab" },
     { id: "premium", label: "Premium ✦", ocid: "feed.premium.tab" },
   ];
@@ -967,7 +998,9 @@ export default function FeedPage() {
                       ? "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))"
                       : tab.id === "long"
                         ? "linear-gradient(135deg, oklch(0.5 0.2 220), oklch(0.55 0.18 200))"
-                        : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))"
+                        : tab.id === "following"
+                          ? "linear-gradient(135deg, oklch(0.5 0.18 185), oklch(0.55 0.16 195))"
+                          : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))"
                     : "transparent",
                 }}
               >
@@ -1101,6 +1134,55 @@ export default function FeedPage() {
               emptyMessage="No premium videos yet. Artists can upload exclusive content!"
               emptyIcon={<Crown className="w-7 h-7 text-amber-400" />}
             />
+          </motion.div>
+        )}
+
+        {/* ── Following Tab: Reels from followed artists ── */}
+        {activeTab === "following" && (
+          <motion.div
+            key="following"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.25 }}
+            className="w-full h-full overflow-y-auto"
+            style={{ paddingTop: 52 }}
+          >
+            {followingFeed.length === 0 ? (
+              <div
+                data-ocid="feed.following.empty_state"
+                className="flex flex-col items-center justify-center gap-4 py-24 px-8 text-center h-full"
+              >
+                <motion.div
+                  initial={{ scale: 0.85, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.3, type: "spring", bounce: 0.3 }}
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.5 0.18 185 / 0.2), oklch(0.55 0.16 195 / 0.15))",
+                    border: "1px solid oklch(0.5 0.18 185 / 0.3)",
+                  }}
+                >
+                  <UserPlus className="w-7 h-7 text-teal-400" />
+                </motion.div>
+                <div>
+                  <p className="text-white/70 font-semibold text-base mb-1">
+                    No videos yet
+                  </p>
+                  <p className="text-white/35 text-sm leading-relaxed">
+                    Follow artists to see their reels here
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <VideoListFeed
+                videos={followingFeed}
+                isPremiumTab={false}
+                emptyMessage="Follow artists to see their reels here"
+                emptyIcon={<UserPlus className="w-7 h-7 text-teal-400" />}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>

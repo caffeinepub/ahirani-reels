@@ -29,8 +29,13 @@ import {
   Zap,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
-import { SiInstagram, SiTelegram, SiWhatsapp } from "react-icons/si";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  SiFacebook,
+  SiInstagram,
+  SiTelegram,
+  SiWhatsapp,
+} from "react-icons/si";
 import { toast } from "sonner";
 import { RewardedAd } from "../components/ads/RewardedAd";
 import type {
@@ -39,6 +44,7 @@ import type {
   WithdrawalRequest,
 } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
+import { getReferralLink, shareReferralLink } from "../hooks/useReferralShare";
 import { formatCount, formatTime } from "../utils/trending";
 
 // ─── Daily Bonus Card ─────────────────────────────────────────────────────────
@@ -597,6 +603,10 @@ function TxTypeBadge({ txType }: { txType: Transaction["txType"] }) {
       label: "Spin Reward",
       className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     },
+    watch_reward: {
+      label: "Watch Reward",
+      className: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    },
   };
   const { label, className } = config[txType];
   return (
@@ -613,24 +623,26 @@ function TxTypeBadge({ txType }: { txType: Transaction["txType"] }) {
 
 function ShareButtonsRow({ referralCode }: { referralCode: string }) {
   const [copiedLink, setCopiedLink] = useState(false);
-  const referralUrl = `https://ahirani-reels.app/referral/${referralCode}`;
+  const referralUrl = getReferralLink(referralCode);
 
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(
-    `Join Ahirani Reels with my referral code ${referralCode}! Sign up, verify OTP and watch 3 videos to activate the referral. ${referralUrl}`,
+    `खान्देशी कलाकारांसाठी Reel App. माझ्या लिंकने जॉइन करा. ${referralUrl}`,
   )}`;
+  const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralUrl)}`;
   const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(
-    `Join Ahirani Reels with my referral code ${referralCode}`,
+    "खान्देशी कलाकारांसाठी Reel App. माझ्या लिंकने जॉइन करा.",
   )}`;
 
   const handleWhatsApp = () => window.open(whatsappUrl, "_blank");
+  const handleFacebook = () => window.open(facebookUrl, "_blank");
   const handleTelegram = () => window.open(telegramUrl, "_blank");
 
   const handleInstagram = async () => {
     try {
       await navigator.clipboard.writeText(referralUrl);
-      toast.success("Link copied — paste it on Instagram!");
+      toast.success("लिंक कॉपी झाली — Instagram वर paste करा!");
     } catch {
-      toast.error("Couldn't copy link");
+      toast.error("लिंक कॉपी होऊ शकली नाही");
     }
   };
 
@@ -639,14 +651,14 @@ function ShareButtonsRow({ referralCode }: { referralCode: string }) {
       await navigator.clipboard.writeText(referralUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
-      toast.success("Referral link copied!");
+      toast.success("रेफरल लिंक कॉपी झाली!");
     } catch {
-      toast.error("Couldn't copy link");
+      toast.error("लिंक कॉपी होऊ शकली नाही");
     }
   };
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
       {/* WhatsApp */}
       <button
         type="button"
@@ -661,6 +673,23 @@ function ShareButtonsRow({ referralCode }: { referralCode: string }) {
         <SiWhatsapp className="w-5 h-5 text-green-400" />
         <span className="text-green-300 text-[10px] font-semibold">
           WhatsApp
+        </span>
+      </button>
+
+      {/* Facebook */}
+      <button
+        type="button"
+        data-ocid="wallet.referral.facebook_button"
+        onClick={handleFacebook}
+        className="flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 transition-all hover:scale-105 active:scale-95 border border-blue-600/20"
+        style={{
+          background:
+            "linear-gradient(135deg, oklch(0.18 0.07 250), oklch(0.13 0.05 248))",
+        }}
+      >
+        <SiFacebook className="w-5 h-5 text-blue-400" />
+        <span className="text-blue-300 text-[10px] font-semibold">
+          Facebook
         </span>
       </button>
 
@@ -736,7 +765,7 @@ function ViewerReferralDashboard() {
   });
 
   const pendingEarnings = liveUser.pendingEarnings ?? 0;
-  const referralUrl = `https://ahirani-reels.app/referral/${user.referralCode}`;
+  const referralUrl = getReferralLink(user.referralCode);
 
   const [copiedCode, setCopiedCode] = useState(false);
   const [upiId, setUpiId] = useState("");
@@ -750,22 +779,17 @@ function ViewerReferralDashboard() {
 
   const handleCopyCode = async () => {
     try {
-      await navigator.clipboard.writeText(user.referralCode);
+      await navigator.clipboard.writeText(referralUrl);
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 2000);
-      toast.success("Referral code copied!");
+      toast.success("रेफरल लिंक कॉपी झाली!");
     } catch {
-      toast.error("Couldn't copy");
+      toast.error("कॉपी होऊ शकली नाही");
     }
   };
 
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(referralUrl);
-      toast.success("Referral link copied!");
-    } catch {
-      toast.error("Couldn't copy link");
-    }
+  const handleShareLink = async () => {
+    await shareReferralLink(user.referralCode);
   };
 
   const handleWithdraw = async () => {
@@ -815,76 +839,342 @@ function ViewerReferralDashboard() {
     });
   };
 
+  // ── Tier milestone calculations ────────────────────────────────────────────
+  const tiers = [
+    { referrals: 1, earning: 5, label: "Starter", icon: "🏁" },
+    { referrals: 10, earning: 50, label: "Pro", icon: "🎯" },
+    { referrals: 100, earning: 500, label: "Champion", icon: "🏆" },
+  ];
+  const totalReferrals = myReferrals.length;
+  const currentTierIdx = tiers.reduce(
+    (acc, tier, i) => (totalReferrals >= tier.referrals ? i : acc),
+    -1,
+  );
+  const nextTier = tiers[currentTierIdx + 1];
+  const prevTierCount =
+    currentTierIdx >= 0 ? tiers[currentTierIdx].referrals : 0;
+  const progressToNext = nextTier
+    ? Math.min(
+        ((totalReferrals - prevTierCount) /
+          (nextTier.referrals - prevTierCount)) *
+          100,
+        100,
+      )
+    : 100;
+
   return (
-    <div className="space-y-5">
-      {/* ── Hero earnings card ── */}
+    <div className="space-y-4">
+      {/* ── SECTION 1: TikTok-style Hero Banner ── */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl p-5 relative overflow-hidden"
+        data-ocid="wallet.viewer_referral.hero_card"
+        className="rounded-2xl relative overflow-hidden"
         style={{
           background:
-            "linear-gradient(135deg, oklch(0.15 0.06 160), oklch(0.10 0.04 150))",
-          border: "1px solid oklch(0.55 0.15 160 / 0.3)",
+            "linear-gradient(135deg, oklch(0.12 0.08 280), oklch(0.10 0.06 320), oklch(0.08 0.04 350))",
+          border: "1px solid oklch(0.45 0.18 300 / 0.35)",
         }}
       >
-        <div className="absolute top-0 right-0 opacity-10 text-7xl flex items-center justify-center w-28 h-28">
-          🎁
-        </div>
-        <p className="text-white/60 text-xs font-medium uppercase tracking-wider mb-2">
-          Referral Earnings
-        </p>
-        <div className="flex items-baseline gap-2 mb-4">
-          <span className="text-4xl font-bold font-display text-emerald-400">
-            ₹{pendingEarnings.toFixed(2)}
-          </span>
-          <span className="text-emerald-400/60 text-sm">available</span>
-        </div>
+        {/* Decorative glows */}
+        <div
+          className="absolute -top-12 -right-12 w-40 h-40 rounded-full opacity-20 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, oklch(0.7 0.25 330), transparent 70%)",
+          }}
+        />
+        <div
+          className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full opacity-15 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, oklch(0.65 0.22 160), transparent 70%)",
+          }}
+        />
 
-        {/* Stats 2×2 grid */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-white/10 rounded-xl p-3 text-center">
-            <p className="text-blue-300 font-bold text-lg font-display leading-none">
-              {myReferrals.length}
-            </p>
-            <p className="text-white/50 text-[10px] mt-0.5">Total Referrals</p>
+        <div className="relative z-10 p-5">
+          {/* Top label */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ background: "oklch(0.55 0.22 330 / 0.3)" }}
+              >
+                <Gift className="w-4 h-4 text-pink-300" />
+              </div>
+              <span className="text-white/70 text-xs font-semibold uppercase tracking-widest">
+                Referral Dashboard
+              </span>
+            </div>
+            <Badge
+              className="text-[10px] px-2 py-0.5 font-semibold"
+              style={{
+                background: "oklch(0.55 0.22 160 / 0.25)",
+                color: "oklch(0.8 0.18 160)",
+                border: "1px solid oklch(0.55 0.18 160 / 0.4)",
+              }}
+            >
+              {successfulReferrals.length} Successful
+            </Badge>
           </div>
-          <div className="bg-white/10 rounded-xl p-3 text-center">
-            <p className="text-emerald-400 font-bold text-lg font-display leading-none">
-              {successfulReferrals.length}
+
+          {/* Big earnings number — center stage */}
+          <div className="text-center mb-4">
+            <p className="text-white/40 text-xs font-medium mb-1">
+              Total Earnings
             </p>
-            <p className="text-white/50 text-[10px] mt-0.5">
-              Successful Referrals
+            <p
+              className="font-display font-black leading-none"
+              style={{
+                fontSize: "clamp(3rem, 12vw, 4.5rem)",
+                background:
+                  "linear-gradient(135deg, oklch(0.85 0.18 160), oklch(0.75 0.22 180))",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              ₹{pendingEarnings.toFixed(0)}
+            </p>
+            <p className="text-emerald-400/60 text-xs mt-1">
+              available to withdraw
             </p>
           </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <div
+              className="rounded-xl p-3 text-center"
+              style={{
+                background: "oklch(1 0 0 / 0.06)",
+                border: "1px solid oklch(1 0 0 / 0.1)",
+              }}
+            >
+              <p className="text-white font-black text-2xl font-display leading-none">
+                {totalReferrals}
+              </p>
+              <p className="text-white/40 text-[10px] mt-0.5 uppercase tracking-wider">
+                Total Referrals
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-3 text-center"
+              style={{
+                background: "oklch(0.55 0.22 330 / 0.15)",
+                border: "1px solid oklch(0.55 0.22 330 / 0.25)",
+              }}
+            >
+              <p className="text-pink-300 font-black text-2xl font-display leading-none">
+                ₹5
+              </p>
+              <p className="text-white/40 text-[10px] mt-0.5 uppercase tracking-wider">
+                Per Referral
+              </p>
+            </div>
+          </div>
+
+          {/* Referral code — large and bold */}
+          <div
+            className="rounded-xl p-3 flex items-center justify-between gap-3 mb-3"
+            style={{
+              background: "oklch(1 0 0 / 0.07)",
+              border: "1px solid oklch(1 0 0 / 0.15)",
+            }}
+          >
+            <div className="min-w-0">
+              <p className="text-white/40 text-[10px] uppercase tracking-wider mb-0.5">
+                Your Code
+              </p>
+              <p className="font-display font-black text-white text-xl tracking-widest truncate">
+                {user.referralCode}
+              </p>
+              <p className="text-white/25 text-[9px] font-mono truncate mt-0.5">
+                {referralUrl}
+              </p>
+            </div>
+            <button
+              type="button"
+              data-ocid="wallet.viewer_referral.copy_code_button"
+              onClick={handleCopyCode}
+              className="shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all active:scale-95"
+              style={{
+                background: copiedCode
+                  ? "oklch(0.55 0.18 160 / 0.4)"
+                  : "oklch(1 0 0 / 0.12)",
+                border: copiedCode
+                  ? "1px solid oklch(0.55 0.18 160 / 0.5)"
+                  : "1px solid oklch(1 0 0 / 0.2)",
+                color: copiedCode ? "oklch(0.8 0.18 160)" : "white",
+              }}
+            >
+              {copiedCode ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Share CTA */}
+          <Button
+            data-ocid="wallet.viewer_referral.share_button"
+            onClick={handleShareLink}
+            className="w-full h-11 font-bold text-sm"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.55 0.22 330), oklch(0.5 0.2 300))",
+              border: "none",
+            }}
+          >
+            <Share2 className="w-4 h-4 mr-2" />
+            Share Referral Link
+          </Button>
         </div>
       </motion.div>
 
-      {/* ── Referral Code + Link card ── */}
+      {/* ── SECTION 2: Tier Milestone Track ── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.07 }}
-        data-ocid="wallet.viewer_referral.code_card"
+        data-ocid="wallet.viewer_referral.milestone_card"
         className="rounded-2xl border border-white/10 bg-card p-5 space-y-4"
       >
         <div className="flex items-center gap-2">
-          <Gift className="w-5 h-5 text-reels-pink" />
-          <h3 className="text-white font-semibold">Your Referral Code</h3>
+          <TrendingUp className="w-5 h-5 text-amber-400" />
+          <h3 className="text-white font-semibold">Earning Milestones</h3>
         </div>
 
-        {/* Big code display */}
-        <div className="rounded-xl border border-dashed border-white/20 bg-white/5 p-4 text-center">
-          <p className="font-display text-3xl font-bold text-white tracking-widest">
-            {user.referralCode}
-          </p>
-          <p className="text-white/40 text-xs mt-2">
-            Earn ₹10 for every friend who signs up, verifies OTP &amp; watches 3
-            videos
-          </p>
+        {/* Tier milestones */}
+        <div className="grid grid-cols-3 gap-2">
+          {tiers.map((tier, i) => {
+            const reached = totalReferrals >= tier.referrals;
+            const isNext = i === currentTierIdx + 1;
+            return (
+              <div
+                key={tier.referrals}
+                data-ocid={`wallet.viewer_referral.milestone.${i + 1}`}
+                className="rounded-xl p-3 text-center relative overflow-hidden transition-all"
+                style={{
+                  background: reached
+                    ? "linear-gradient(135deg, oklch(0.18 0.06 80), oklch(0.14 0.04 75))"
+                    : isNext
+                      ? "oklch(1 0 0 / 0.05)"
+                      : "oklch(1 0 0 / 0.03)",
+                  border: reached
+                    ? "1px solid oklch(0.65 0.18 80 / 0.5)"
+                    : isNext
+                      ? "1px solid oklch(0.65 0.18 80 / 0.25)"
+                      : "1px solid oklch(1 0 0 / 0.08)",
+                }}
+              >
+                {reached && (
+                  <div
+                    className="absolute inset-0 opacity-10 pointer-events-none"
+                    style={{
+                      background:
+                        "radial-gradient(circle at top, oklch(0.75 0.22 80), transparent 70%)",
+                    }}
+                  />
+                )}
+                <div className="text-2xl mb-1">{tier.icon}</div>
+                <p
+                  className="font-black text-xl font-display leading-none"
+                  style={{
+                    color: reached
+                      ? "oklch(0.82 0.2 80)"
+                      : isNext
+                        ? "oklch(0.7 0.14 80)"
+                        : "oklch(0.5 0.03 0)",
+                  }}
+                >
+                  ₹{tier.earning}
+                </p>
+                <p
+                  className="text-[10px] mt-0.5"
+                  style={{
+                    color: reached
+                      ? "oklch(0.7 0.12 80)"
+                      : "oklch(0.45 0.02 0)",
+                  }}
+                >
+                  {tier.referrals} ref{tier.referrals > 1 ? "s" : ""}
+                </p>
+                {reached && (
+                  <div className="mt-1.5 flex justify-center">
+                    <CheckCircle2
+                      className="w-3.5 h-3.5"
+                      style={{ color: "oklch(0.75 0.2 80)" }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Referral link row */}
+        {/* Progress bar toward next milestone */}
+        {nextTier && (
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-white/50 text-xs">
+                Progress to{" "}
+                <span className="text-amber-400 font-semibold">
+                  {nextTier.icon} ₹{nextTier.earning}
+                </span>
+              </span>
+              <span className="text-white/50 text-xs tabular-nums">
+                {totalReferrals}/{nextTier.referrals}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${progressToNext}%` }}
+                transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+                className="h-full rounded-full"
+                style={{
+                  background:
+                    "linear-gradient(90deg, oklch(0.65 0.18 80), oklch(0.75 0.22 90))",
+                }}
+              />
+            </div>
+            <p className="text-white/40 text-[10px] text-center">
+              {nextTier.referrals - totalReferrals} more referral
+              {nextTier.referrals - totalReferrals !== 1 ? "s" : ""} to reach ₹
+              {nextTier.earning}
+            </p>
+          </div>
+        )}
+        {!nextTier && (
+          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-center">
+            <p className="text-amber-300 text-xs font-semibold">
+              🏆 Champion Tier Reached! Keep earning ₹5 per referral.
+            </p>
+          </div>
+        )}
+      </motion.div>
+
+      {/* ── SECTION 3: Share Row (5 buttons) ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        data-ocid="wallet.viewer_referral.share_card"
+        className="rounded-2xl border border-white/10 bg-card p-5 space-y-3"
+      >
+        <div className="flex items-center gap-2">
+          <Share2 className="w-5 h-5 text-white/50" />
+          <h3 className="text-white font-semibold">Share Your Link</h3>
+        </div>
+
+        {/* Referral link display */}
         <div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2">
           <Link2 className="w-3.5 h-3.5 text-white/30 shrink-0" />
           <p className="flex-1 text-white/50 text-xs truncate font-mono">
@@ -893,103 +1183,28 @@ function ViewerReferralDashboard() {
           <button
             type="button"
             data-ocid="wallet.viewer_referral.copy_link_button"
-            onClick={handleCopyLink}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(referralUrl);
+                toast.success("रेफरल लिंक कॉपी झाली!");
+              } catch {
+                toast.error("लिंक कॉपी होऊ शकली नाही");
+              }
+            }}
             className="shrink-0 text-white/50 hover:text-white transition-colors"
           >
             <Copy className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Copy code button */}
-        <Button
-          data-ocid="wallet.viewer_referral.copy_code_button"
-          onClick={handleCopyCode}
-          variant="secondary"
-          className="w-full h-10 bg-white/10 hover:bg-white/20 text-white border-white/20"
-        >
-          {copiedCode ? (
-            <>
-              <Check className="w-4 h-4 mr-2 text-green-400" />
-              Copied!
-            </>
-          ) : (
-            <>
-              <Copy className="w-4 h-4 mr-2" />
-              Copy Code
-            </>
-          )}
-        </Button>
-      </motion.div>
-
-      {/* ── Share Buttons ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.12 }}
-        className="rounded-2xl border border-white/10 bg-card p-5 space-y-3"
-      >
-        <div className="flex items-center gap-2">
-          <Share2 className="w-5 h-5 text-white/50" />
-          <h3 className="text-white font-semibold">Share Your Link</h3>
-        </div>
         <ShareButtonsRow referralCode={user.referralCode} />
       </motion.div>
 
-      {/* ── Reward Conditions card ── */}
+      {/* ── SECTION 4: Referral Activity ── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.16 }}
-        className="rounded-2xl border border-white/10 bg-card p-5 space-y-3"
-      >
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5 text-amber-400" />
-          <h3 className="text-white font-semibold">How Rewards Work</h3>
-        </div>
-        <p className="text-white/50 text-xs">
-          Your referrals earn you ₹10 when they complete all 3 steps:
-        </p>
-        <div className="space-y-2">
-          {[
-            {
-              icon: <Users className="w-3.5 h-3.5" />,
-              label: "Sign up with your referral link",
-            },
-            {
-              icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-              label: "Verify their OTP (phone number)",
-            },
-            {
-              icon: <Play className="w-3.5 h-3.5" />,
-              label: "Watch at least 3 videos",
-            },
-          ].map((step, i) => (
-            <div key={step.label} className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                {step.icon}
-              </div>
-              <div className="flex-1">
-                <p className="text-white/70 text-xs">{step.label}</p>
-              </div>
-              <span className="text-white/30 text-[10px] font-mono">
-                Step {i + 1}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2">
-          <p className="text-amber-300 text-[10px] text-center">
-            ₹10 is credited instantly after step 3 is completed · Minimum
-            withdrawal ₹200
-          </p>
-        </div>
-      </motion.div>
-
-      {/* ── Referral Activity ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
         className="rounded-2xl border border-white/10 bg-card overflow-hidden"
       >
         <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
@@ -1010,7 +1225,7 @@ function ViewerReferralDashboard() {
             <p className="text-3xl mb-2">👥</p>
             <p className="text-white/40 text-sm">No referrals yet</p>
             <p className="text-white/30 text-xs mt-1">
-              Share your code to start earning ₹10 per successful referral
+              Share your code to start earning ₹5 per successful referral
             </p>
           </div>
         ) : (
@@ -1255,6 +1470,753 @@ function ViewerReferralDashboard() {
   );
 }
 
+// ─── Viewer Points Dashboard ──────────────────────────────────────────────────
+
+type PaymentMethod = "upi" | "paytm" | "bank";
+
+function ViewerPointsDashboard() {
+  const { state, dispatch } = useApp();
+  const user = state.currentUser!;
+  const liveUser = state.users.find((u) => u.id === user.id) ?? user;
+
+  const myTransactions = (state.transactions ?? []).filter(
+    (tx) => tx.userId === user.id,
+  );
+  const myReferrals = state.referrals.filter((r) => r.referrerId === user.id);
+  const myWithdrawals = state.withdrawalRequests.filter(
+    (w) => w.userId === user.id,
+  );
+
+  // Compute category sums
+  const referralEarnings = myTransactions
+    .filter((tx) => tx.txType === "referral_credit")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const watchRewards = myTransactions
+    .filter((tx) => tx.txType === "watch_reward")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const loginRewards = myTransactions
+    .filter((tx) => tx.txType === "daily_bonus")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const totalPoints = liveUser.points ?? 0;
+  const pendingEarnings = liveUser.pendingEarnings ?? 0;
+
+  // Withdrawal form state
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("upi");
+  const [fullName, setFullName] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [paytmNumber, setPaytmNumber] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
+  const [bankIfsc, setBankIfsc] = useState("");
+  const [bankHolder, setBankHolder] = useState("");
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+
+  const handleWithdraw = async () => {
+    const amount = Number.parseFloat(withdrawAmount);
+
+    if (!fullName.trim()) {
+      toast.error("Please enter your full name");
+      return;
+    }
+    if (!withdrawAmount || Number.isNaN(amount) || amount < 200) {
+      toast.error("Minimum withdrawal amount is ₹200");
+      return;
+    }
+    if (amount > pendingEarnings) {
+      toast.error(
+        `Insufficient balance. Available: ₹${pendingEarnings.toFixed(2)}`,
+      );
+      return;
+    }
+
+    if (paymentMethod === "upi" && !upiId.trim()) {
+      toast.error("Please enter your UPI ID");
+      return;
+    }
+    if (
+      paymentMethod === "paytm" &&
+      (!paytmNumber.trim() || paytmNumber.trim().length !== 10)
+    ) {
+      toast.error("Please enter a valid 10-digit Paytm number");
+      return;
+    }
+    if (paymentMethod === "bank") {
+      if (!bankAccount.trim() || !bankIfsc.trim() || !bankHolder.trim()) {
+        toast.error("Please fill in all bank transfer details");
+        return;
+      }
+    }
+
+    setWithdrawLoading(true);
+    await new Promise((r) => setTimeout(r, 800));
+
+    const request: import("../context/AppContext").WithdrawalRequest = {
+      id: `w${Date.now()}`,
+      userId: user.id,
+      upiId: paymentMethod === "upi" ? upiId.trim() : "",
+      userName: fullName.trim(),
+      amount,
+      status: "pending",
+      createdAt: Date.now(),
+      resolvedAt: 0,
+      processedAt: 0,
+      paymentMethod,
+      paytmNumber: paymentMethod === "paytm" ? paytmNumber.trim() : undefined,
+      bankAccountNumber:
+        paymentMethod === "bank" ? bankAccount.trim() : undefined,
+      bankIfsc: paymentMethod === "bank" ? bankIfsc.trim() : undefined,
+      bankAccountHolder:
+        paymentMethod === "bank" ? bankHolder.trim() : undefined,
+    };
+
+    dispatch({ type: "REQUEST_WITHDRAWAL", request });
+
+    // Reset form
+    setFullName("");
+    setWithdrawAmount("");
+    setUpiId("");
+    setPaytmNumber("");
+    setBankAccount("");
+    setBankIfsc("");
+    setBankHolder("");
+    setWithdrawLoading(false);
+
+    const methodLabel =
+      paymentMethod === "upi"
+        ? `UPI: ${upiId.trim()}`
+        : paymentMethod === "paytm"
+          ? `Paytm: ${paytmNumber.trim()}`
+          : `Bank: ${bankHolder.trim()}`;
+
+    toast.success("Withdrawal request submitted!", {
+      description: `₹${amount.toFixed(2)} to ${methodLabel} — pending admin approval`,
+    });
+  };
+
+  const watchedToday = liveUser.watchedVideosToday ?? 0;
+  const watchProgress = Math.min((watchedToday / 10) * 100, 100);
+
+  return (
+    <div className="space-y-4">
+      {/* ── Stats Grid ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        data-ocid="wallet.points.section"
+        className="grid grid-cols-2 gap-3"
+      >
+        {/* Total Points */}
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-1.5 relative overflow-hidden"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.18 0.06 280), oklch(0.12 0.04 280))",
+            border: "1px solid oklch(0.6 0.2 280 / 0.3)",
+          }}
+        >
+          <Sparkles className="w-4 h-4 text-violet-400" />
+          <p className="text-violet-300 font-bold text-2xl font-display leading-none">
+            {totalPoints}
+          </p>
+          <p className="text-white/50 text-[11px]">Total Points</p>
+        </div>
+
+        {/* Referral Earnings */}
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-1.5 relative overflow-hidden"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.18 0.05 340), oklch(0.12 0.03 340))",
+            border: "1px solid oklch(0.65 0.25 340 / 0.3)",
+          }}
+        >
+          <Users className="w-4 h-4 text-reels-pink" />
+          <p className="text-reels-pink font-bold text-2xl font-display leading-none">
+            ₹{referralEarnings.toFixed(0)}
+          </p>
+          <p className="text-white/50 text-[11px]">Referral Earnings</p>
+        </div>
+
+        {/* Watch Rewards */}
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-1.5 relative overflow-hidden"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.18 0.04 240), oklch(0.12 0.03 240))",
+            border: "1px solid oklch(0.55 0.15 240 / 0.3)",
+          }}
+        >
+          <Play className="w-4 h-4 text-blue-400" />
+          <p className="text-blue-300 font-bold text-2xl font-display leading-none">
+            ₹{watchRewards.toFixed(0)}
+          </p>
+          <p className="text-white/50 text-[11px]">Watch Rewards</p>
+        </div>
+
+        {/* Daily Login Rewards */}
+        <div
+          className="rounded-2xl p-4 flex flex-col gap-1.5 relative overflow-hidden"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.18 0.05 70), oklch(0.12 0.03 60))",
+            border: "1px solid oklch(0.75 0.18 80 / 0.3)",
+          }}
+        >
+          <CalendarDays className="w-4 h-4 text-amber-400" />
+          <p className="text-amber-300 font-bold text-2xl font-display leading-none">
+            ₹{loginRewards.toFixed(0)}
+          </p>
+          <p className="text-white/50 text-[11px]">Login Rewards</p>
+        </div>
+      </motion.div>
+
+      {/* ── Points Rules Card ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.07 }}
+        className="rounded-2xl border border-white/10 overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(135deg, oklch(0.14 0.05 280 / 0.8), oklch(0.10 0.03 280 / 0.9))",
+        }}
+      >
+        <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+          <Star className="w-4 h-4 text-violet-400" />
+          <h3 className="text-white font-semibold text-sm">
+            How to Earn Points
+          </h3>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/25 flex items-center justify-center shrink-0">
+              <Play className="w-4 h-4 text-blue-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-white text-sm font-medium">Watch 10 videos</p>
+              <p className="text-white/40 text-xs">
+                Earn 2 pts (₹2) per 10 videos watched
+              </p>
+            </div>
+            <span className="text-blue-300 font-bold text-sm shrink-0">
+              +2 pts
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/25 flex items-center justify-center shrink-0">
+              <CalendarDays className="w-4 h-4 text-violet-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-white text-sm font-medium">Daily login</p>
+              <p className="text-white/40 text-xs">
+                Claim your daily bonus in the Rewards tab
+              </p>
+            </div>
+            <span className="text-violet-300 font-bold text-sm shrink-0">
+              +1 pt
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-pink-500/20 border border-pink-500/25 flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4 text-reels-pink" />
+            </div>
+            <div className="flex-1">
+              <p className="text-white text-sm font-medium">Invite a friend</p>
+              <p className="text-white/40 text-xs">
+                Share your referral code · earn on signup
+              </p>
+            </div>
+            <span className="text-reels-pink font-bold text-sm shrink-0">
+              +5 pts
+            </span>
+          </div>
+
+          {/* Today's watch progress */}
+          <div className="mt-2 pt-3 border-t border-white/10">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-white/60 text-xs">
+                Today's videos watched
+              </span>
+              <span className="text-white/60 text-xs tabular-nums">
+                {watchedToday}/10
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${watchProgress}%` }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="h-full rounded-full"
+                style={{
+                  background:
+                    "linear-gradient(90deg, oklch(0.55 0.15 240), oklch(0.65 0.18 250))",
+                }}
+              />
+            </div>
+            <p className="text-white/30 text-[10px] mt-1">
+              {watchedToday >= 10
+                ? "Reward earned! Keep watching tomorrow."
+                : `${10 - watchedToday} more videos for +2 pts`}
+            </p>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ── Withdrawal Form ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        className="rounded-2xl border border-white/10 bg-card p-5 space-y-4"
+      >
+        <div className="flex items-center gap-2">
+          <Wallet className="w-5 h-5 text-violet-400" />
+          <h3 className="text-white font-semibold">Request Withdrawal</h3>
+        </div>
+        <p className="text-white/40 text-xs -mt-1">
+          Minimum ₹200 · Available: ₹{pendingEarnings.toFixed(2)}
+        </p>
+
+        {/* Payment method selector */}
+        <div className="space-y-1.5">
+          <Label className="text-white/70 text-xs font-medium">
+            Payment Method
+          </Label>
+          <div className="grid grid-cols-3 gap-2">
+            {(["upi", "paytm", "bank"] as PaymentMethod[]).map((method) => {
+              const labels = { upi: "UPI", paytm: "Paytm", bank: "Bank" };
+              const icons = { upi: "🏦", paytm: "📱", bank: "🏛️" };
+              return (
+                <button
+                  key={method}
+                  type="button"
+                  data-ocid={`wallet.points_withdraw.${method}_tab`}
+                  onClick={() => setPaymentMethod(method)}
+                  className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border transition-all text-xs font-medium"
+                  style={{
+                    background:
+                      paymentMethod === method
+                        ? "oklch(0.6 0.2 280 / 0.25)"
+                        : "oklch(1 0 0 / 0.05)",
+                    borderColor:
+                      paymentMethod === method
+                        ? "oklch(0.6 0.2 280 / 0.6)"
+                        : "oklch(1 0 0 / 0.12)",
+                    color:
+                      paymentMethod === method
+                        ? "oklch(0.8 0.15 280)"
+                        : "oklch(0.6 0.02 0)",
+                  }}
+                >
+                  <span>{icons[method]}</span>
+                  {labels[method]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {/* Full Name — always */}
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="points-withdraw-name"
+              className="text-white/70 text-xs font-medium"
+            >
+              Full Name
+            </Label>
+            <Input
+              id="points-withdraw-name"
+              data-ocid="wallet.points_withdraw.name_input"
+              placeholder="Your full name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+            />
+          </div>
+
+          {/* Method-specific fields */}
+          {paymentMethod === "upi" && (
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="points-upi-id"
+                className="text-white/70 text-xs font-medium"
+              >
+                UPI ID
+              </Label>
+              <Input
+                id="points-upi-id"
+                data-ocid="wallet.points_withdraw.upi_input"
+                placeholder="yourname@upi"
+                value={upiId}
+                onChange={(e) => setUpiId(e.target.value)}
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+              />
+            </div>
+          )}
+
+          {paymentMethod === "paytm" && (
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="points-paytm"
+                className="text-white/70 text-xs font-medium"
+              >
+                Paytm Mobile Number
+              </Label>
+              <Input
+                id="points-paytm"
+                data-ocid="wallet.points_withdraw.paytm_input"
+                placeholder="10-digit mobile number"
+                type="tel"
+                maxLength={10}
+                value={paytmNumber}
+                onChange={(e) =>
+                  setPaytmNumber(e.target.value.replace(/\D/g, ""))
+                }
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+              />
+            </div>
+          )}
+
+          {paymentMethod === "bank" && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="points-bank-account"
+                  className="text-white/70 text-xs font-medium"
+                >
+                  Account Number
+                </Label>
+                <Input
+                  id="points-bank-account"
+                  data-ocid="wallet.points_withdraw.bank_account_input"
+                  placeholder="Enter account number"
+                  value={bankAccount}
+                  onChange={(e) => setBankAccount(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="points-ifsc"
+                  className="text-white/70 text-xs font-medium"
+                >
+                  IFSC Code
+                </Label>
+                <Input
+                  id="points-ifsc"
+                  data-ocid="wallet.points_withdraw.ifsc_input"
+                  placeholder="e.g. SBIN0001234"
+                  value={bankIfsc}
+                  onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="points-bank-holder"
+                  className="text-white/70 text-xs font-medium"
+                >
+                  Account Holder Name
+                </Label>
+                <Input
+                  id="points-bank-holder"
+                  data-ocid="wallet.points_withdraw.bank_holder_input"
+                  placeholder="Name as per bank records"
+                  value={bankHolder}
+                  onChange={(e) => setBankHolder(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Amount */}
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="points-amount"
+              className="text-white/70 text-xs font-medium"
+            >
+              Amount (₹)
+            </Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-sm font-medium">
+                ₹
+              </span>
+              <Input
+                id="points-amount"
+                data-ocid="wallet.points_withdraw.amount_input"
+                type="number"
+                min={200}
+                step={1}
+                placeholder="200"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                className="pl-7 bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+              />
+            </div>
+            <p className="text-white/30 text-[10px]">
+              Available: ₹{pendingEarnings.toFixed(2)} · Min: ₹200
+            </p>
+          </div>
+        </div>
+
+        <Button
+          data-ocid="wallet.points_withdraw.submit_button"
+          onClick={handleWithdraw}
+          disabled={withdrawLoading || pendingEarnings < 200}
+          className="w-full h-11 font-semibold"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.55 0.2 280), oklch(0.5 0.18 270))",
+          }}
+        >
+          {withdrawLoading ? (
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Submitting...
+            </span>
+          ) : (
+            <>
+              <IndianRupee className="w-4 h-4 mr-1.5" />
+              Request Withdrawal
+            </>
+          )}
+        </Button>
+
+        {pendingEarnings < 200 && (
+          <p className="text-amber-400/70 text-[10px] text-center">
+            Earn at least ₹200 in rewards to unlock withdrawals
+          </p>
+        )}
+      </motion.div>
+
+      {/* ── History Section ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.18 }}
+        className="rounded-2xl border border-white/10 bg-card overflow-hidden"
+      >
+        <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+          <ReceiptText className="w-4 h-4 text-white/50" />
+          <h3 className="text-white font-semibold text-sm">History</h3>
+        </div>
+
+        <Tabs defaultValue="points_hist" className="p-0">
+          <TabsList className="w-full bg-white/5 border-b border-white/10 rounded-none h-9 gap-0 p-0">
+            <TabsTrigger
+              value="points_hist"
+              data-ocid="wallet.points.history.points_tab"
+              className="flex-1 h-full rounded-none text-white/50 data-[state=active]:text-white data-[state=active]:bg-white/10 text-[11px] border-none"
+            >
+              Points
+            </TabsTrigger>
+            <TabsTrigger
+              value="referrals_hist"
+              data-ocid="wallet.points.history.referrals_tab"
+              className="flex-1 h-full rounded-none text-white/50 data-[state=active]:text-white data-[state=active]:bg-white/10 text-[11px] border-none"
+            >
+              Referrals
+            </TabsTrigger>
+            <TabsTrigger
+              value="withdrawals_hist"
+              data-ocid="wallet.points.history.withdrawals_tab"
+              className="flex-1 h-full rounded-none text-white/50 data-[state=active]:text-white data-[state=active]:bg-white/10 text-[11px] border-none"
+            >
+              Withdrawals
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Points history */}
+          <TabsContent value="points_hist" className="mt-0">
+            {(() => {
+              const pointTxs = myTransactions.filter((tx) =>
+                (
+                  [
+                    "watch_reward",
+                    "daily_bonus",
+                    "referral_credit",
+                    "spin_reward",
+                  ] as Transaction["txType"][]
+                ).includes(tx.txType),
+              );
+              if (pointTxs.length === 0) {
+                return (
+                  <div
+                    data-ocid="wallet.points.history.points_empty_state"
+                    className="py-10 text-center"
+                  >
+                    <p className="text-3xl mb-2">⭐</p>
+                    <p className="text-white/40 text-sm">
+                      No points activity yet
+                    </p>
+                    <p className="text-white/30 text-xs mt-1">
+                      Watch videos, login daily, and invite friends to earn
+                    </p>
+                  </div>
+                );
+              }
+              return (
+                <div className="divide-y divide-white/5">
+                  {pointTxs.map((tx, i) => {
+                    const icons: Partial<
+                      Record<Transaction["txType"], ReactNode>
+                    > = {
+                      watch_reward: (
+                        <Play className="w-3.5 h-3.5 text-blue-400" />
+                      ),
+                      daily_bonus: (
+                        <CalendarDays className="w-3.5 h-3.5 text-violet-400" />
+                      ),
+                      referral_credit: (
+                        <Users className="w-3.5 h-3.5 text-reels-pink" />
+                      ),
+                      spin_reward: (
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      ),
+                    };
+                    return (
+                      <div
+                        key={tx.id}
+                        data-ocid={`wallet.points.history.item.${i + 1}`}
+                        className="px-4 py-3 flex items-center gap-3"
+                      >
+                        <div className="w-7 h-7 rounded-full bg-white/8 flex items-center justify-center shrink-0">
+                          {icons[tx.txType] ?? (
+                            <Star className="w-3.5 h-3.5 text-white/40" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white/80 text-xs truncate">
+                            {tx.description}
+                          </p>
+                          <p className="text-white/30 text-[10px] mt-0.5">
+                            {formatTime(tx.createdAt)} ago
+                          </p>
+                        </div>
+                        <span className="text-green-400 font-bold text-sm shrink-0">
+                          +₹{tx.amount.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </TabsContent>
+
+          {/* Referrals history */}
+          <TabsContent value="referrals_hist" className="mt-0">
+            {myReferrals.length === 0 ? (
+              <div
+                data-ocid="wallet.points.history.referrals_empty_state"
+                className="py-10 text-center"
+              >
+                <p className="text-3xl mb-2">👥</p>
+                <p className="text-white/40 text-sm">No referrals yet</p>
+                <p className="text-white/30 text-xs mt-1">
+                  Share your code to start earning
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="px-4 py-2 bg-white/5 border-b border-white/10 grid grid-cols-[1fr_auto_auto] gap-3 items-center">
+                  <span className="text-white/40 text-[10px] font-semibold uppercase tracking-wider">
+                    User
+                  </span>
+                  <span className="text-white/40 text-[10px] font-semibold uppercase tracking-wider w-20 text-center">
+                    Date
+                  </span>
+                  <span className="text-white/40 text-[10px] font-semibold uppercase tracking-wider w-16 text-right">
+                    Earned
+                  </span>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {myReferrals.map((referral, i) => (
+                    <div
+                      key={`${referral.referrerId}-${referral.referredUserId}`}
+                      data-ocid={`wallet.points.referral.item.${i + 1}`}
+                      className="px-4 py-3 grid grid-cols-[1fr_auto_auto] gap-3 items-center"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                          <span className="text-white font-bold text-[10px]">
+                            {referral.referredUsername[0]?.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="text-white text-xs font-medium truncate">
+                          @{referral.referredUsername}
+                        </p>
+                      </div>
+                      <span className="text-white/40 text-[10px] w-20 text-center">
+                        {new Date(referral.createdAt).toLocaleDateString(
+                          "en-IN",
+                          { day: "2-digit", month: "short" },
+                        )}
+                      </span>
+                      <span className="text-emerald-400 font-bold text-sm w-16 text-right">
+                        +₹{referral.commissionEarned}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </TabsContent>
+
+          {/* Withdrawals history */}
+          <TabsContent value="withdrawals_hist" className="mt-0">
+            {myWithdrawals.length === 0 ? (
+              <div
+                data-ocid="wallet.points.history.withdrawals_empty_state"
+                className="py-10 text-center"
+              >
+                <p className="text-3xl mb-2">💸</p>
+                <p className="text-white/40 text-sm">
+                  No withdrawal requests yet
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {myWithdrawals.map((w, i) => {
+                  const methodLabel =
+                    w.paymentMethod === "paytm"
+                      ? `Paytm: ${w.paytmNumber}`
+                      : w.paymentMethod === "bank"
+                        ? `Bank · ${w.bankAccountHolder}`
+                        : `UPI: ${w.upiId}`;
+                  return (
+                    <div
+                      key={w.id}
+                      data-ocid={`wallet.points.withdrawal.item.${i + 1}`}
+                      className="px-4 py-3 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-medium">
+                          ₹{w.amount.toFixed(2)}
+                        </p>
+                        <p className="text-white/40 text-xs truncate">
+                          {methodLabel}
+                        </p>
+                        <p className="text-white/30 text-[10px] mt-0.5">
+                          {formatTime(w.createdAt)} ago
+                        </p>
+                      </div>
+                      <WithdrawalStatusBadge status={w.status} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </motion.div>
+    </div>
+  );
+}
+
 // ─── Wallet Page ──────────────────────────────────────────────────────────────
 
 export default function WalletPage() {
@@ -1304,16 +2266,16 @@ export default function WalletPage() {
     (tx) => tx.userId === user.id,
   );
 
-  const referralUrl = `https://ahirani-reels.app/referral/${user.referralCode}`;
+  const referralUrl = getReferralLink(user.referralCode);
 
   const handleCopyCode = async () => {
     try {
-      await navigator.clipboard.writeText(user.referralCode);
+      await navigator.clipboard.writeText(referralUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      toast.success("Referral code copied!");
+      toast.success("रेफरल लिंक कॉपी झाली!");
     } catch {
-      toast.error("Couldn't copy, try manually");
+      toast.error("कॉपी होऊ शकली नाही, manually try करा");
     }
   };
 
@@ -1396,6 +2358,15 @@ export default function WalletPage() {
             >
               {liveUser.role === "viewer" ? "Refs" : "Earn"}
             </TabsTrigger>
+            {liveUser.role === "viewer" && (
+              <TabsTrigger
+                value="points"
+                data-ocid="wallet.points_tab"
+                className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs"
+              >
+                ⭐ Points
+              </TabsTrigger>
+            )}
             <TabsTrigger
               value="rewards"
               data-ocid="wallet.rewards_tab"
@@ -1569,13 +2540,16 @@ export default function WalletPage() {
                 <h3 className="text-white font-semibold">Your Referral Code</h3>
               </div>
 
-              <div className="rounded-xl border border-dashed border-white/20 bg-white/5 p-4 text-center">
+              <div className="rounded-xl border border-dashed border-white/20 bg-white/5 p-4 text-center space-y-1">
                 <p className="font-display text-3xl font-bold text-white tracking-widest">
                   {user.referralCode}
                 </p>
-                <p className="text-white/40 text-xs mt-2">
+                <p className="text-white/30 text-[10px] font-mono break-all">
+                  {referralUrl}
+                </p>
+                <p className="text-white/40 text-xs">
                   {liveUser.role === "viewer"
-                    ? "Share this code · Earn ₹10 per successful referral"
+                    ? "Share this code · Earn ₹5 per successful referral"
                     : "Share this code · Earn ₹10 per signup + ₹60 when they subscribe"}
                 </p>
               </div>
@@ -1601,26 +2575,7 @@ export default function WalletPage() {
                 </Button>
                 <Button
                   data-ocid="wallet.share_referral_button"
-                  onClick={async () => {
-                    const text =
-                      liveUser.role === "viewer"
-                        ? `Join Ahirani Reels with my referral code ${user.referralCode}! Sign up, verify OTP and watch 3 videos to activate the referral. ${referralUrl}`
-                        : `Join Ahirani Reels with my referral code ${user.referralCode} and start watching! 🎬`;
-                    try {
-                      if (navigator.share) {
-                        await navigator.share({
-                          title: "Ahirani Reels",
-                          text,
-                          url: referralUrl,
-                        });
-                      } else {
-                        await navigator.clipboard.writeText(text);
-                        toast.success("Share text copied!");
-                      }
-                    } catch {
-                      toast.error("Couldn't share");
-                    }
-                  }}
+                  onClick={() => shareReferralLink(user.referralCode)}
                   className="flex-1 h-11 font-semibold"
                   style={{
                     background:
@@ -2114,13 +3069,16 @@ export default function WalletPage() {
                 <h3 className="text-white font-semibold">Your Referral Code</h3>
               </div>
 
-              <div className="rounded-xl border border-dashed border-white/20 bg-white/5 p-4 text-center">
+              <div className="rounded-xl border border-dashed border-white/20 bg-white/5 p-4 text-center space-y-1">
                 <p className="font-display text-3xl font-bold text-white tracking-widest">
                   {user.referralCode}
                 </p>
-                <p className="text-white/40 text-xs mt-2">
+                <p className="text-white/30 text-[10px] font-mono break-all">
+                  {referralUrl}
+                </p>
+                <p className="text-white/40 text-xs">
                   {liveUser.role === "viewer"
-                    ? "Earn ₹10 per successful referral"
+                    ? "Earn ₹5 per successful referral"
                     : "Share your code · Earn ₹60 when they subscribe"}
                 </p>
               </div>
@@ -2137,9 +3095,9 @@ export default function WalletPage() {
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(referralUrl);
-                      toast.success("Referral link copied!");
+                      toast.success("रेफरल लिंक कॉपी झाली!");
                     } catch {
-                      toast.error("Couldn't copy link");
+                      toast.error("लिंक कॉपी होऊ शकली नाही");
                     }
                   }}
                   className="shrink-0 text-white/50 hover:text-white transition-colors"
@@ -2286,6 +3244,13 @@ export default function WalletPage() {
             </motion.div>
           </TabsContent>
 
+          {/* ── Points Tab (Viewer only) ──────────────────────────────────────── */}
+          {liveUser.role === "viewer" && (
+            <TabsContent value="points" className="space-y-5 mt-0">
+              <ViewerPointsDashboard />
+            </TabsContent>
+          )}
+
           {/* ── Rewards Tab ──────────────────────────────────────────────────── */}
           <TabsContent value="rewards" className="space-y-5 mt-0">
             <DailyBonusCard />
@@ -2328,7 +3293,8 @@ export default function WalletPage() {
                       tx.txType === "referral_credit" ||
                       tx.txType === "withdrawal_rejected" ||
                       tx.txType === "daily_bonus" ||
-                      tx.txType === "spin_reward";
+                      tx.txType === "spin_reward" ||
+                      tx.txType === "watch_reward";
                     const isDebit =
                       tx.txType === "withdrawal_requested" ||
                       tx.txType === "subscription_payment";

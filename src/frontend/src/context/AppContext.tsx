@@ -32,6 +32,11 @@ export interface WithdrawalRequest {
   createdAt: number;
   resolvedAt: number; // 0 if not resolved; set on approve/reject
   processedAt: number; // 0 if not processed; set on approve, updated on paid
+  paymentMethod?: "upi" | "paytm" | "bank";
+  paytmNumber?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  bankAccountHolder?: string;
 }
 
 export interface User {
@@ -56,6 +61,13 @@ export interface User {
   lastLoginDate: number; // unix ms of last daily bonus claim
   lastSpinDate: number; // unix ms of last lucky spin (0 = never)
   isVerifiedCreator: boolean; // admin-granted verified badge
+  points: number; // cumulative points earned
+  watchedVideosToday: number; // count of videos watched today (resets daily)
+  lastWatchRewardDate: string; // date string for daily watch reset
+  // Multi-provider auth fields
+  email?: string;
+  password?: string; // plain text simulation (not for production)
+  authProvider?: "phone" | "email" | "username" | "google" | "facebook";
 }
 
 export interface Video {
@@ -113,7 +125,8 @@ export interface Transaction {
     | "withdrawal_paid"
     | "subscription_payment"
     | "daily_bonus"
-    | "spin_reward";
+    | "spin_reward"
+    | "watch_reward";
   amount: number;
   description: string;
   createdAt: number;
@@ -252,7 +265,8 @@ type Action =
   | { type: "SPIN_WHEEL"; userId: string; reward: number }
   | { type: "SHARE_VIDEO_BOOST"; videoId: string; userId: string }
   | { type: "GRANT_VERIFIED_BADGE"; userId: string }
-  | { type: "REVOKE_VERIFIED_BADGE"; userId: string };
+  | { type: "REVOKE_VERIFIED_BADGE"; userId: string }
+  | { type: "EARN_WATCH_POINTS"; userId: string };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -457,6 +471,10 @@ const MOCK_USERS: User[] = [
     lastLoginDate: Date.now() - 86400000, // yesterday
     lastSpinDate: 0,
     isVerifiedCreator: true,
+    points: 0,
+    watchedVideosToday: 0,
+    lastWatchRewardDate: "",
+    authProvider: "phone" as const,
   },
   {
     id: "u2",
@@ -481,6 +499,10 @@ const MOCK_USERS: User[] = [
     lastLoginDate: Date.now() - 86400000,
     lastSpinDate: 0,
     isVerifiedCreator: false,
+    points: 0,
+    watchedVideosToday: 0,
+    lastWatchRewardDate: "",
+    authProvider: "phone" as const,
   },
   {
     id: "u3",
@@ -505,6 +527,10 @@ const MOCK_USERS: User[] = [
     lastLoginDate: Date.now() - 86400000,
     lastSpinDate: 0,
     isVerifiedCreator: false,
+    points: 12,
+    watchedVideosToday: 0,
+    lastWatchRewardDate: "",
+    authProvider: "phone" as const,
   },
   {
     id: "u4",
@@ -529,6 +555,10 @@ const MOCK_USERS: User[] = [
     lastLoginDate: Date.now() - 86400000,
     lastSpinDate: 0,
     isVerifiedCreator: false,
+    points: 0,
+    watchedVideosToday: 0,
+    lastWatchRewardDate: "",
+    authProvider: "phone" as const,
   },
 ];
 
@@ -837,6 +867,9 @@ function getInitialState(): AppState {
         lastLoginDate: u.lastLoginDate ?? 0,
         lastSpinDate: u.lastSpinDate ?? 0,
         isVerifiedCreator: u.isVerifiedCreator ?? false,
+        points: u.points ?? 0,
+        watchedVideosToday: u.watchedVideosToday ?? 0,
+        lastWatchRewardDate: u.lastWatchRewardDate ?? "",
       }));
       return {
         ...parsed,
@@ -1110,6 +1143,58 @@ function reducer(state: AppState, action: Action): AppState {
             createdAt: Date.now(),
           };
           newTransactions = [tx, ...state.transactions];
+        }
+      }
+
+      // Track video watch count for current user (for viewer watch reward)
+      const watchingUserId =
+        action.type === "TRACK_VIEW" ? action.userId : state.currentUser?.id;
+
+      if (watchingUserId) {
+        const todayStr = new Date().toDateString();
+        updatedUsers = updatedUsers.map((u) => {
+          if (u.id !== watchingUserId) return u;
+          // Reset if it's a new day
+          const isNewDay = (u.lastWatchRewardDate ?? "") !== todayStr;
+          const currentWatched = isNewDay ? 0 : (u.watchedVideosToday ?? 0);
+          const newWatchedCount = currentWatched + 1;
+
+          // If reached 10 videos, inline the watch reward logic
+          if (newWatchedCount >= 10) {
+            const earnNow = Date.now();
+            const watchTx: Transaction = {
+              id: `tx${earnNow}watch`,
+              userId: u.id,
+              txType: "watch_reward",
+              amount: 2,
+              description: "Watch reward: 10 videos watched today",
+              createdAt: earnNow,
+            };
+            newTransactions = [watchTx, ...newTransactions];
+            return {
+              ...u,
+              points: (u.points ?? 0) + 2,
+              pendingEarnings: (u.pendingEarnings ?? 0) + 2,
+              watchedVideosToday: 0,
+              lastWatchRewardDate: todayStr,
+            };
+          }
+
+          return {
+            ...u,
+            watchedVideosToday: newWatchedCount,
+            lastWatchRewardDate: isNewDay ? todayStr : u.lastWatchRewardDate,
+          };
+        });
+
+        // Update currentUser if it's the watcher
+        if (state.currentUser?.id === watchingUserId) {
+          const updatedWatcher = updatedUsers.find(
+            (u) => u.id === watchingUserId,
+          );
+          if (updatedWatcher) {
+            updatedCurrentUser = updatedWatcher;
+          }
         }
       }
 
@@ -1658,8 +1743,8 @@ function reducer(state: AppState, action: Action): AppState {
         };
       }
 
-      // All 3 conditions met: credit ₹10 to referrer
-      const VIEWER_REFERRAL_REWARD = 10;
+      // All 3 conditions met: credit ₹5 to referrer
+      const VIEWER_REFERRAL_REWARD = 5;
       const now = Date.now();
 
       const referredUser = state.users.find(
@@ -1713,7 +1798,7 @@ function reducer(state: AppState, action: Action): AppState {
         id: `notif_vref_${now}`,
         userId: progress.referrerId,
         type: "referral_reward",
-        message: `You earned ₹10 referral reward from @${referredUsername}`,
+        message: `You earned ₹5 referral reward from @${referredUsername}`,
         createdAt: now,
         isRead: false,
       };
@@ -1885,6 +1970,7 @@ function reducer(state: AppState, action: Action): AppState {
               lastLoginDate: claimNow,
               coins: u.coins + reward,
               pendingEarnings: (u.pendingEarnings ?? 0) + reward,
+              points: (u.points ?? 0) + 1,
             }
           : u,
       );
@@ -1897,6 +1983,7 @@ function reducer(state: AppState, action: Action): AppState {
               coins: state.currentUser.coins + reward,
               pendingEarnings:
                 (state.currentUser.pendingEarnings ?? 0) + reward,
+              points: (state.currentUser.points ?? 0) + 1,
             }
           : state.currentUser;
 
@@ -1906,6 +1993,47 @@ function reducer(state: AppState, action: Action): AppState {
         currentUser: updatedCurrentUser,
         transactions: [bonusTx, ...state.transactions],
         notifications: [bonusNotif, ...state.notifications],
+      };
+    }
+
+    // ── Earn Watch Points ─────────────────────────────────────────────────────
+
+    case "EARN_WATCH_POINTS": {
+      const earnNow = Date.now();
+      const updatedUsers = state.users.map((u) =>
+        u.id === action.userId
+          ? {
+              ...u,
+              points: (u.points ?? 0) + 2,
+              pendingEarnings: (u.pendingEarnings ?? 0) + 2,
+              watchedVideosToday: 0,
+              lastWatchRewardDate: new Date().toDateString(),
+            }
+          : u,
+      );
+      const updatedCurrentUser =
+        state.currentUser?.id === action.userId
+          ? {
+              ...state.currentUser,
+              points: (state.currentUser.points ?? 0) + 2,
+              pendingEarnings: (state.currentUser.pendingEarnings ?? 0) + 2,
+              watchedVideosToday: 0,
+              lastWatchRewardDate: new Date().toDateString(),
+            }
+          : state.currentUser;
+      const watchTx: Transaction = {
+        id: `tx${earnNow}watch`,
+        userId: action.userId,
+        txType: "watch_reward",
+        amount: 2,
+        description: "Watch reward: 10 videos watched today",
+        createdAt: earnNow,
+      };
+      return {
+        ...state,
+        users: updatedUsers,
+        currentUser: updatedCurrentUser,
+        transactions: [watchTx, ...state.transactions],
       };
     }
 
@@ -2077,7 +2205,7 @@ function AppProviderInner({ children }: { children: React.ReactNode }) {
           toast.success("Connected to ICP", {
             id: "icp-connected",
             duration: 3000,
-            description: "Ahirani Reels backend is live",
+            description: "फक्त अहिराणी backend is live",
           });
         }
       } catch {

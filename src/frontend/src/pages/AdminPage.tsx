@@ -1220,8 +1220,12 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                           <TableCell className="text-white/70 text-xs max-w-[100px] truncate">
                             {req.userName || "—"}
                           </TableCell>
-                          <TableCell className="text-white/50 text-xs max-w-[120px] truncate">
-                            {req.upiId}
+                          <TableCell className="text-white/50 text-xs max-w-[140px] truncate">
+                            {req.paymentMethod === "paytm"
+                              ? `Paytm: ${req.paytmNumber}`
+                              : req.paymentMethod === "bank"
+                                ? `Bank: ${req.bankAccountHolder} · ${req.bankAccountNumber} · ${req.bankIfsc}`
+                                : `UPI: ${req.upiId}`}
                           </TableCell>
                           <TableCell>
                             <span className="text-white font-semibold text-sm">

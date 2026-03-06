@@ -6,9 +6,9 @@ import List "mo:core/List";
 import Runtime "mo:core/Runtime";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   type UserId = Nat;
   type VideoId = Nat;

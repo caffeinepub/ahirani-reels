@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import CreatorBadge from "../components/CreatorBadge";
 import { useApp } from "../context/AppContext";
 import type { SubscriptionStatus, User, UserRole } from "../context/AppContext";
+import { getReferralLink, shareReferralLink } from "../hooks/useReferralShare";
 import { formatCount } from "../utils/trending";
 
 // ─── Role Badge ───────────────────────────────────────────────────────────────
@@ -299,30 +300,21 @@ function SubscriptionCard({ user }: { user: User }) {
 
 function ReferralCodeCard({ user }: { user: User }) {
   const [copied, setCopied] = useState(false);
+  const referralLink = getReferralLink(user.referralCode);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(user.referralCode);
+      await navigator.clipboard.writeText(referralLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      toast.success("Referral code copied!");
+      toast.success("रेफरल लिंक कॉपी झाली!");
     } catch {
-      toast.error("Couldn't copy, try manually");
+      toast.error("कॉपी होऊ शकली नाही, manually try करा");
     }
   };
 
   const handleShare = async () => {
-    const text = `Join Ahirani Reels with my referral code ${user.referralCode}! 🎬`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: "Ahirani Reels", text });
-      } else {
-        await navigator.clipboard.writeText(text);
-        toast.success("Share text copied!");
-      }
-    } catch {
-      toast.error("Couldn't share");
-    }
+    await shareReferralLink(user.referralCode);
   };
 
   const isArtist = user.role === "artist";
@@ -341,11 +333,14 @@ function ReferralCodeCard({ user }: { user: User }) {
       </div>
 
       {/* Code display */}
-      <div className="rounded-xl bg-white/8 px-4 py-3 text-center border border-white/10">
+      <div className="rounded-xl bg-white/8 px-4 py-3 text-center border border-white/10 space-y-1">
         <p className="font-display text-2xl font-bold text-white tracking-widest">
           {user.referralCode}
         </p>
-        <p className="text-white/40 text-[11px] mt-1.5">
+        <p className="text-white/30 text-[10px] font-mono break-all">
+          {referralLink}
+        </p>
+        <p className="text-white/40 text-[11px]">
           {isArtist
             ? "Earn ₹60 when a referred artist subscribes"
             : "Earn ₹10 when a friend joins"}
@@ -369,7 +364,7 @@ function ReferralCodeCard({ user }: { user: User }) {
           ) : (
             <>
               <Copy className="w-3.5 h-3.5 mr-1.5" />
-              Copy
+              Copy Link
             </>
           )}
         </Button>
