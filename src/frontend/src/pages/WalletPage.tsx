@@ -48,6 +48,7 @@ import type {
   WithdrawalRequest,
 } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
+import { useLang } from "../context/LanguageContext";
 import { getReferralLink, shareReferralLink } from "../hooks/useReferralShare";
 import { formatCount, formatTime } from "../utils/trending";
 
@@ -920,6 +921,18 @@ function TxTypeBadge({ txType }: { txType: Transaction["txType"] }) {
     task_reward: {
       label: "Task Reward",
       className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    },
+    gift_sent: {
+      label: "Gift Sent",
+      className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    },
+    gift_received: {
+      label: "Gift Received",
+      className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    },
+    promotion_payment: {
+      label: "Promotion",
+      className: "bg-violet-500/20 text-violet-400 border-violet-500/30",
     },
   };
   const { label, className } = config[txType];
@@ -2535,6 +2548,7 @@ function ViewerPointsDashboard() {
 
 export default function WalletPage() {
   const { state, dispatch } = useApp();
+  const { t } = useLang();
   const user = state.currentUser;
   const [copied, setCopied] = useState(false);
   const [adOpen, setAdOpen] = useState(false);
@@ -2566,7 +2580,7 @@ export default function WalletPage() {
 
   const totalEarned = myVideos.reduce((sum, v) => {
     const rate = rpm[v.videoType] ?? 2;
-    const gross = (v.viewsCount * rate) / 1000;
+    const gross = ((v.adImpressions ?? 0) * rate) / 1000;
     return sum + gross * 0.6;
   }, 0);
 
@@ -2608,8 +2622,8 @@ export default function WalletPage() {
       toast.error("Please enter your UPI ID");
       return;
     }
-    if (!withdrawAmount || Number.isNaN(amount) || amount < 200) {
-      toast.error("Minimum withdrawal amount is ₹200");
+    if (!withdrawAmount || Number.isNaN(amount) || amount < 500) {
+      toast.error("Minimum withdrawal amount is ₹500");
       return;
     }
     if (amount > pendingEarnings) {
@@ -2663,21 +2677,23 @@ export default function WalletPage() {
               data-ocid="wallet.wallet_tab"
               className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
-              Wallet
+              {t("wallet.title")}
             </TabsTrigger>
             <TabsTrigger
               value="tasks"
               data-ocid="wallet.tasks_tab"
               className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
-              ✅ Tasks
+              ✅ {t("wallet.tasks")}
             </TabsTrigger>
             <TabsTrigger
               value="earnings"
               data-ocid="wallet.earnings_tab"
               className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
-              {liveUser.role === "viewer" ? "Refs" : "Earn"}
+              {liveUser.role === "viewer"
+                ? t("wallet.refs")
+                : t("wallet.earnings")}
             </TabsTrigger>
             {liveUser.role === "viewer" && (
               <TabsTrigger
@@ -2685,7 +2701,7 @@ export default function WalletPage() {
                 data-ocid="wallet.points_tab"
                 className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
               >
-                ⭐ Points
+                ⭐ {t("wallet.points")}
               </TabsTrigger>
             )}
             <TabsTrigger
@@ -2693,21 +2709,21 @@ export default function WalletPage() {
               data-ocid="wallet.rewards_tab"
               className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
-              🎁 Rewards
+              🎁 {t("wallet.rewards")}
             </TabsTrigger>
             <TabsTrigger
               value="referral"
               data-ocid="wallet.referral_tab"
               className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
-              Share
+              {t("wallet.refs")}
             </TabsTrigger>
             <TabsTrigger
               value="transactions"
               data-ocid="wallet.transactions_tab"
               className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
-              History
+              {t("wallet.history")}
             </TabsTrigger>
           </TabsList>
 
@@ -2777,7 +2793,7 @@ export default function WalletPage() {
                   {myVideos
                     .reduce((sum, v) => {
                       const rate = rpm[v.videoType] ?? 2;
-                      const gross = (v.viewsCount * rate) / 1000;
+                      const gross = ((v.adImpressions ?? 0) * rate) / 1000;
                       return sum + gross * 0.6;
                     }, 0)
                     .toFixed(2)}
@@ -2974,6 +2990,100 @@ export default function WalletPage() {
               <ViewerReferralDashboard />
             ) : (
               <>
+                {/* ── Earnings Breakdown (3 cards) ── */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  data-ocid="wallet.earnings.breakdown.section"
+                  className="grid grid-cols-3 gap-2"
+                >
+                  {/* Total Ad Earnings */}
+                  <div
+                    className="rounded-2xl p-3 flex flex-col gap-1.5 relative overflow-hidden"
+                    data-ocid="wallet.earnings.ad_earnings.card"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, oklch(0.18 0.04 240), oklch(0.12 0.03 240))",
+                      border: "1px solid oklch(0.55 0.15 240 / 0.3)",
+                    }}
+                  >
+                    <IndianRupee className="w-3.5 h-3.5 text-blue-400" />
+                    <p className="text-blue-300 font-bold text-lg font-display leading-none">
+                      ₹
+                      {myTransactions
+                        .filter((tx) => tx.txType === "ad_earnings")
+                        .reduce((s, tx) => s + tx.amount, 0)
+                        .toFixed(2)}
+                    </p>
+                    <p className="text-white/50 text-[10px] leading-tight">
+                      Total Ad Earnings
+                    </p>
+                  </div>
+
+                  {/* Total Gift Earnings */}
+                  <div
+                    className="rounded-2xl p-3 flex flex-col gap-1.5 relative overflow-hidden"
+                    data-ocid="wallet.earnings.gift_earnings.card"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, oklch(0.18 0.05 70), oklch(0.12 0.03 60))",
+                      border: "1px solid oklch(0.75 0.18 80 / 0.3)",
+                    }}
+                  >
+                    <Gift className="w-3.5 h-3.5 text-amber-400" />
+                    <p className="text-amber-300 font-bold text-lg font-display leading-none">
+                      ₹
+                      {myTransactions
+                        .filter((tx) => tx.txType === "gift_received")
+                        .reduce((s, tx) => s + tx.amount, 0)
+                        .toFixed(2)}
+                    </p>
+                    <p className="text-white/50 text-[10px] leading-tight">
+                      Total Gift Earnings
+                    </p>
+                  </div>
+
+                  {/* Total Referral Earnings */}
+                  <div
+                    className="rounded-2xl p-3 flex flex-col gap-1.5 relative overflow-hidden"
+                    data-ocid="wallet.earnings.referral_earnings.card"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, oklch(0.18 0.06 340), oklch(0.12 0.04 330))",
+                      border: "1px solid oklch(0.65 0.22 340 / 0.3)",
+                    }}
+                  >
+                    <Users className="w-3.5 h-3.5 text-reels-pink" />
+                    <p className="text-reels-pink font-bold text-lg font-display leading-none">
+                      ₹
+                      {myTransactions
+                        .filter((tx) => tx.txType === "referral_credit")
+                        .reduce((s, tx) => s + tx.amount, 0)
+                        .toFixed(2)}
+                    </p>
+                    <p className="text-white/50 text-[10px] leading-tight">
+                      Total Referral Earnings
+                    </p>
+                  </div>
+                </motion.div>
+
+                {/* Revenue split info line */}
+                <div
+                  className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs"
+                  style={{
+                    background: "oklch(0.55 0.15 160 / 0.1)",
+                    border: "1px solid oklch(0.55 0.15 160 / 0.2)",
+                  }}
+                >
+                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-emerald-400 font-semibold">
+                    60% Artist
+                  </span>
+                  <span className="text-white/30">/</span>
+                  <div className="w-2 h-2 rounded-full bg-white/40" />
+                  <span className="text-white/50">40% Platform</span>
+                </div>
+
                 {/* ── Summary Stats Row (2×2 grid) ── */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -3125,7 +3235,8 @@ export default function WalletPage() {
                       <div className="divide-y divide-white/5">
                         {myVideos.map((video, i) => {
                           const rate = rpm[video.videoType] ?? 2;
-                          const gross = (video.viewsCount * rate) / 1000;
+                          const gross =
+                            ((video.adImpressions ?? 0) * rate) / 1000;
                           const artistEarn = gross * 0.6;
                           return (
                             <div
@@ -3175,7 +3286,7 @@ export default function WalletPage() {
                     </h3>
                   </div>
                   <p className="text-white/40 text-xs -mt-1">
-                    Minimum ₹200 · Processed within 2-3 business days
+                    Minimum ₹500 · Processed within 2-3 business days
                   </p>
 
                   <div className="space-y-3">
@@ -3226,16 +3337,16 @@ export default function WalletPage() {
                           id="withdraw-amount"
                           data-ocid="wallet.amount_input"
                           type="number"
-                          min={200}
+                          min={500}
                           step={1}
-                          placeholder="200"
+                          placeholder="500"
                           value={withdrawAmount}
                           onChange={(e) => setWithdrawAmount(e.target.value)}
                           className="pl-7 bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
                         />
                       </div>
                       <p className="text-white/30 text-[10px]">
-                        Available: ₹{pendingEarnings.toFixed(2)} · Min: ₹200
+                        Available: ₹{pendingEarnings.toFixed(2)} · Min: ₹500
                       </p>
                     </div>
                   </div>
@@ -3340,7 +3451,7 @@ export default function WalletPage() {
                     ))}
                   </div>
                   <p className="text-white/30 text-[10px] mt-2 text-center">
-                    Formula: (Views × RPM) / 1000 × 60% artist share
+                    Formula: (Ad Impressions × RPM) / 1000 × 60% artist share
                   </p>
                 </motion.div>
               </>

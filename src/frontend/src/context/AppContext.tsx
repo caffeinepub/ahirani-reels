@@ -96,6 +96,11 @@ export interface Video {
   viewsCount: number;
   adImpressions: number;
   shareCount: number; // incremented on each share action
+  isPromoted?: boolean;
+  promotedReach?: number;
+  promotedAt?: number;
+  promotionExpiry?: number;
+  promotionTier?: "basic" | "standard" | "premium";
 }
 
 export interface Comment {
@@ -137,7 +142,10 @@ export interface Transaction {
     | "daily_bonus"
     | "spin_reward"
     | "watch_reward"
-    | "task_reward";
+    | "task_reward"
+    | "gift_sent"
+    | "gift_received"
+    | "promotion_payment";
   amount: number;
   description: string;
   createdAt: number;
@@ -187,7 +195,9 @@ export interface Notification {
     | "withdrawal_requested"
     | "withdrawal_paid"
     | "daily_bonus"
-    | "spin_reward";
+    | "spin_reward"
+    | "live_started"
+    | "gift_received";
   message: string;
   createdAt: number;
   isRead: boolean;
@@ -199,6 +209,63 @@ export interface VideoReport {
   reporterId: string;
   reason: string;
   createdAt: number;
+}
+
+// ─── Live Streaming Types ─────────────────────────────────────────────────────
+
+export interface LiveChatMessage {
+  id: string;
+  userId: string;
+  username: string;
+  text: string;
+  createdAt: number;
+}
+
+export interface LiveStream {
+  id: string;
+  artistId: string;
+  title: string;
+  viewerCount: number;
+  chatMessages: LiveChatMessage[];
+  startedAt: number;
+  isActive: boolean;
+  endedAt?: number;
+}
+
+export interface Gift {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  videoId?: string;
+  liveStreamId?: string;
+  giftType: "clap" | "star" | "fire" | "crown";
+  coinCost: number;
+  createdAt: number;
+}
+
+export const GIFT_COSTS: Record<Gift["giftType"], number> = {
+  clap: 5,
+  star: 20,
+  fire: 50,
+  crown: 100,
+};
+
+export interface AdRevenueRecord {
+  id: string;
+  videoId: string;
+  viewerId: string;
+  revenueAmount: number; // default ₹1 per ad impression
+  artistShare: number; // revenueAmount × 0.6
+  adminShare: number; // revenueAmount × 0.4
+  createdAt: number;
+}
+
+export interface VideoEarnings {
+  videoId: string;
+  totalViews: number;
+  totalAdRevenue: number;
+  artistEarnings: number;
+  adminEarnings: number;
 }
 
 export interface AppState {
@@ -218,6 +285,10 @@ export interface AppState {
   reports: VideoReport[];
   // keyed by referredUserId
   viewerReferralProgress: Record<string, ViewerReferralProgress>;
+  liveStreams: LiveStream[];
+  gifts: Gift[];
+  adRevenueRecords: AdRevenueRecord[];
+  adminTotalEarnings: number; // accumulates 40% admin share from all ad records
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -278,7 +349,25 @@ type Action =
   | { type: "GRANT_VERIFIED_BADGE"; userId: string }
   | { type: "REVOKE_VERIFIED_BADGE"; userId: string }
   | { type: "EARN_WATCH_POINTS"; userId: string }
-  | { type: "DELETE_COMMENT"; commentId: string };
+  | { type: "DELETE_COMMENT"; commentId: string }
+  | { type: "START_LIVE"; stream: LiveStream }
+  | { type: "END_LIVE"; streamId: string }
+  | { type: "JOIN_LIVE"; streamId: string }
+  | { type: "LEAVE_LIVE"; streamId: string }
+  | { type: "SEND_LIVE_CHAT"; streamId: string; message: LiveChatMessage }
+  | { type: "SEND_GIFT"; gift: Gift }
+  | {
+      type: "PROMOTE_VIDEO";
+      videoId: string;
+      tier: "basic" | "standard" | "premium";
+      cost: number;
+    }
+  | {
+      type: "RECORD_AD_REVENUE";
+      videoId: string;
+      viewerId: string;
+      revenueAmount: number;
+    };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -288,7 +377,8 @@ const DEFAULT_RPM: AdRpmConfig = { reel: 2, long: 4, premium: 8 };
 
 function calcArtistEarnings(video: Video, rpm: AdRpmConfig): number {
   const rate = rpm[video.videoType] ?? 2;
-  const gross = (video.viewsCount * rate) / 1000;
+  // Use adImpressions as the revenue-driving metric (each ad shown = revenue)
+  const gross = ((video.adImpressions ?? 0) * rate) / 1000;
   return gross * 0.6;
 }
 
@@ -381,6 +471,11 @@ const MOCK_VIDEOS: Video[] = [
     viewsCount: 12800,
     adImpressions: 6500,
     shareCount: 1203,
+    isPromoted: true,
+    promotedReach: 5000,
+    promotedAt: Date.now() - 86400000,
+    promotionExpiry: Date.now() + 86400000 * 6,
+    promotionTier: "standard",
   },
   {
     id: "v5",
@@ -444,12 +539,12 @@ const MOCK_VIDEOS: Video[] = [
   },
 ];
 
-// Calculate totalEarnings for each user based on their seed videos
+// Calculate totalEarnings for each user based on their seed videos (using adImpressions)
 function calcSeedEarnings(userId: string): number {
   const userVideos = MOCK_VIDEOS.filter((v) => v.uploaderId === userId);
   return userVideos.reduce((sum, v) => {
     const rate = DEFAULT_RPM[v.videoType];
-    const gross = (v.viewsCount * rate) / 1000;
+    const gross = ((v.adImpressions ?? 0) * rate) / 1000;
     return sum + gross * 0.6;
   }, 0);
 }
@@ -783,6 +878,24 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   },
 ];
 
+// ─── Seed Ad Revenue Records ─────────────────────────────────────────────────
+
+const MOCK_AD_REVENUE_RECORDS: AdRevenueRecord[] = MOCK_VIDEOS.map((v, i) => ({
+  id: `adr${i + 1}`,
+  videoId: v.id,
+  viewerId: "seeded",
+  revenueAmount: 1,
+  artistShare: 0.6,
+  adminShare: 0.4,
+  createdAt: v.createdAt - 1000,
+}));
+
+// Admin earnings = sum of all seeded adminShares
+const SEED_ADMIN_TOTAL_EARNINGS = MOCK_AD_REVENUE_RECORDS.reduce(
+  (s, r) => s + r.adminShare,
+  0,
+);
+
 // ─── Mock Local Ads ───────────────────────────────────────────────────────────
 
 const MOCK_LOCAL_ADS: LocalAd[] = [
@@ -878,6 +991,42 @@ const MOCK_NOTIFICATIONS: Notification[] = [
   },
 ];
 
+// ─── Seed Live Streams ────────────────────────────────────────────────────────
+
+const MOCK_LIVE_STREAMS: LiveStream[] = [
+  {
+    id: "live1",
+    artistId: "u1",
+    title: "Live Dance Practice Session 💃",
+    viewerCount: 234,
+    chatMessages: [
+      {
+        id: "lc1",
+        userId: "u2",
+        username: "rahul_comedy",
+        text: "🔥🔥🔥",
+        createdAt: Date.now() - 60000,
+      },
+      {
+        id: "lc2",
+        userId: "u3",
+        username: "neha_vlogs",
+        text: "Amazing moves!",
+        createdAt: Date.now() - 30000,
+      },
+      {
+        id: "lc3",
+        userId: "u4",
+        username: "arjun_fitness",
+        text: "Queen 👑",
+        createdAt: Date.now() - 10000,
+      },
+    ],
+    startedAt: Date.now() - 3600000,
+    isActive: true,
+  },
+];
+
 // ─── Initial State ────────────────────────────────────────────────────────────
 
 function getInitialState(): AppState {
@@ -948,6 +1097,11 @@ function getInitialState(): AppState {
         followingIds: parsed.followingIds ?? [],
         notifications: parsed.notifications ?? MOCK_NOTIFICATIONS,
         reports: parsed.reports ?? [],
+        liveStreams: parsed.liveStreams ?? MOCK_LIVE_STREAMS,
+        gifts: parsed.gifts ?? [],
+        adRevenueRecords: parsed.adRevenueRecords ?? MOCK_AD_REVENUE_RECORDS,
+        adminTotalEarnings:
+          parsed.adminTotalEarnings ?? SEED_ADMIN_TOTAL_EARNINGS,
       };
     }
   } catch {
@@ -969,6 +1123,10 @@ function getInitialState(): AppState {
     notifications: MOCK_NOTIFICATIONS,
     reports: [],
     viewerReferralProgress: MOCK_VIEWER_REFERRAL_PROGRESS,
+    liveStreams: MOCK_LIVE_STREAMS,
+    gifts: [],
+    adRevenueRecords: MOCK_AD_REVENUE_RECORDS,
+    adminTotalEarnings: SEED_ADMIN_TOTAL_EARNINGS,
   };
 }
 
@@ -1831,13 +1989,63 @@ function reducer(state: AppState, action: Action): AppState {
     }
 
     case "TRACK_AD_IMPRESSION": {
+      const impVideo = state.videos.find((v) => v.id === action.videoId);
+      const updatedImpVideos = state.videos.map((v) =>
+        v.id === action.videoId
+          ? { ...v, adImpressions: (v.adImpressions ?? 0) + 1 }
+          : v,
+      );
+
+      // Credit artist earnings based on adImpressions RPM (60% artist share)
+      let impUsers = state.users;
+      let impCurrentUser = state.currentUser;
+      let impTransactions = state.transactions;
+
+      if (impVideo && !impVideo.isDeleted) {
+        const rpm = state.rpmConfig;
+        const rate = rpm[impVideo.videoType] ?? 2;
+        // Earnings delta for one additional impression
+        const delta = (rate / 1000) * 0.6;
+
+        impUsers = state.users.map((u) =>
+          u.id === impVideo.uploaderId
+            ? {
+                ...u,
+                pendingEarnings: (u.pendingEarnings ?? 0) + delta,
+                totalEarnings: (u.totalEarnings ?? 0) + delta,
+              }
+            : u,
+        );
+
+        if (state.currentUser?.id === impVideo.uploaderId) {
+          impCurrentUser = {
+            ...state.currentUser,
+            pendingEarnings: (state.currentUser.pendingEarnings ?? 0) + delta,
+            totalEarnings: (state.currentUser.totalEarnings ?? 0) + delta,
+          };
+        }
+
+        // Record a transaction for every 10th impression (to avoid transaction spam)
+        const newImpCount = (impVideo.adImpressions ?? 0) + 1;
+        if (newImpCount % 10 === 0 && delta > 0) {
+          const impTx: Transaction = {
+            id: `tx${Date.now()}imp${newImpCount}`,
+            userId: impVideo.uploaderId,
+            txType: "ad_earnings",
+            amount: delta * 10,
+            description: `Ad earnings: ${impVideo.caption.slice(0, 40)} (${newImpCount} impressions)`,
+            createdAt: Date.now(),
+          };
+          impTransactions = [impTx, ...state.transactions];
+        }
+      }
+
       return {
         ...state,
-        videos: state.videos.map((v) =>
-          v.id === action.videoId
-            ? { ...v, adImpressions: (v.adImpressions ?? 0) + 1 }
-            : v,
-        ),
+        videos: updatedImpVideos,
+        users: impUsers,
+        currentUser: impCurrentUser,
+        transactions: impTransactions,
       };
     }
 
@@ -2423,6 +2631,296 @@ function reducer(state: AppState, action: Action): AppState {
       };
     }
 
+    // ── Live Streaming ────────────────────────────────────────────────────────
+
+    case "START_LIVE": {
+      const liveNow = Date.now();
+      // Notify artist's followers about the live stream
+      const artist = state.users.find((u) => u.id === action.stream.artistId);
+      const followerIds = state.users
+        .filter((_u) => state.followingIds.includes(action.stream.artistId))
+        .map((u) => u.id);
+      const liveNotifs: Notification[] = followerIds.map((fid) => ({
+        id: `notif_live_${liveNow}_${fid}`,
+        userId: fid,
+        type: "live_started" as const,
+        message: `@${artist?.username ?? "artist"} is now LIVE: ${action.stream.title}`,
+        createdAt: liveNow,
+        isRead: false,
+      }));
+      return {
+        ...state,
+        liveStreams: [action.stream, ...state.liveStreams],
+        notifications: [...liveNotifs, ...state.notifications],
+      };
+    }
+
+    case "END_LIVE": {
+      return {
+        ...state,
+        liveStreams: state.liveStreams.map((s) =>
+          s.id === action.streamId
+            ? { ...s, isActive: false, endedAt: Date.now() }
+            : s,
+        ),
+      };
+    }
+
+    case "JOIN_LIVE": {
+      return {
+        ...state,
+        liveStreams: state.liveStreams.map((s) =>
+          s.id === action.streamId
+            ? { ...s, viewerCount: s.viewerCount + 1 }
+            : s,
+        ),
+      };
+    }
+
+    case "LEAVE_LIVE": {
+      return {
+        ...state,
+        liveStreams: state.liveStreams.map((s) =>
+          s.id === action.streamId
+            ? { ...s, viewerCount: Math.max(0, s.viewerCount - 1) }
+            : s,
+        ),
+      };
+    }
+
+    case "SEND_LIVE_CHAT": {
+      return {
+        ...state,
+        liveStreams: state.liveStreams.map((s) =>
+          s.id === action.streamId
+            ? {
+                ...s,
+                chatMessages: [...s.chatMessages, action.message],
+              }
+            : s,
+        ),
+      };
+    }
+
+    // ── Virtual Gifts ─────────────────────────────────────────────────────────
+
+    case "SEND_GIFT": {
+      const giftNow = Date.now();
+      const { gift } = action;
+      const artistShare = (gift.coinCost / 10) * 0.6; // coins→₹ then 60%
+
+      const updatedGiftUsers = state.users.map((u) => {
+        if (u.id === gift.senderId) {
+          return { ...u, coins: Math.max(0, u.coins - gift.coinCost) };
+        }
+        if (u.id === gift.receiverId) {
+          return {
+            ...u,
+            pendingEarnings: (u.pendingEarnings ?? 0) + artistShare,
+            totalEarnings: (u.totalEarnings ?? 0) + artistShare,
+          };
+        }
+        return u;
+      });
+
+      let updatedGiftCurrentUser = state.currentUser;
+      if (state.currentUser?.id === gift.senderId) {
+        updatedGiftCurrentUser = {
+          ...state.currentUser,
+          coins: Math.max(0, state.currentUser.coins - gift.coinCost),
+        };
+      } else if (state.currentUser?.id === gift.receiverId) {
+        updatedGiftCurrentUser = {
+          ...state.currentUser,
+          pendingEarnings:
+            (state.currentUser.pendingEarnings ?? 0) + artistShare,
+          totalEarnings: (state.currentUser.totalEarnings ?? 0) + artistShare,
+        };
+      }
+
+      const sender = state.users.find((u) => u.id === gift.senderId);
+      const giftEmojis = {
+        clap: "👏",
+        star: "⭐",
+        fire: "🔥",
+        crown: "👑",
+      };
+
+      const sentTx: Transaction = {
+        id: `tx${giftNow}giftsent`,
+        userId: gift.senderId,
+        txType: "gift_sent",
+        amount: gift.coinCost,
+        description: `Gift sent: ${giftEmojis[gift.giftType]} ${gift.giftType} (${gift.coinCost} coins)`,
+        createdAt: giftNow,
+      };
+
+      const receivedTx: Transaction = {
+        id: `tx${giftNow}giftrecv`,
+        userId: gift.receiverId,
+        txType: "gift_received",
+        amount: artistShare,
+        description: `Gift received from @${sender?.username ?? "user"}: ${giftEmojis[gift.giftType]} ${gift.giftType}`,
+        createdAt: giftNow,
+      };
+
+      const giftNotif: Notification = {
+        id: `notif_gift_${giftNow}`,
+        userId: gift.receiverId,
+        type: "gift_received",
+        message: `@${sender?.username ?? "user"} sent you a ${giftEmojis[gift.giftType]} ${gift.giftType} gift!`,
+        createdAt: giftNow,
+        isRead: false,
+      };
+
+      return {
+        ...state,
+        users: updatedGiftUsers,
+        currentUser: updatedGiftCurrentUser,
+        gifts: [gift, ...state.gifts],
+        transactions: [sentTx, receivedTx, ...state.transactions],
+        notifications: [giftNotif, ...state.notifications],
+      };
+    }
+
+    // ── Video Promotion ───────────────────────────────────────────────────────
+
+    case "PROMOTE_VIDEO": {
+      const promoteNow = Date.now();
+      const reachMap: Record<string, number> = {
+        basic: 1000,
+        standard: 5000,
+        premium: 10000,
+      };
+      const reach = reachMap[action.tier] ?? 1000;
+
+      const updatedPromoteUsers = state.users.map((u) => {
+        const video = state.videos.find((v) => v.id === action.videoId);
+        if (u.id === video?.uploaderId) {
+          return {
+            ...u,
+            pendingEarnings: Math.max(
+              0,
+              (u.pendingEarnings ?? 0) - action.cost,
+            ),
+          };
+        }
+        return u;
+      });
+
+      let updatedPromoteCurrentUser = state.currentUser;
+      if (state.currentUser) {
+        const video = state.videos.find((v) => v.id === action.videoId);
+        if (video?.uploaderId === state.currentUser.id) {
+          updatedPromoteCurrentUser = {
+            ...state.currentUser,
+            pendingEarnings: Math.max(
+              0,
+              (state.currentUser.pendingEarnings ?? 0) - action.cost,
+            ),
+          };
+        }
+      }
+
+      const promoteTx: Transaction = {
+        id: `tx${promoteNow}promo`,
+        userId:
+          state.videos.find((v) => v.id === action.videoId)?.uploaderId ?? "",
+        txType: "promotion_payment",
+        amount: action.cost,
+        description: `Video promotion: ${action.tier} (${reach.toLocaleString()} extra reach, 7 days)`,
+        createdAt: promoteNow,
+      };
+
+      return {
+        ...state,
+        videos: state.videos.map((v) =>
+          v.id === action.videoId
+            ? {
+                ...v,
+                isPromoted: true,
+                promotionTier: action.tier,
+                promotedReach: reach,
+                promotedAt: promoteNow,
+                promotionExpiry: promoteNow + 86400000 * 7,
+              }
+            : v,
+        ),
+        users: updatedPromoteUsers,
+        currentUser: updatedPromoteCurrentUser,
+        transactions: [promoteTx, ...state.transactions],
+      };
+    }
+
+    // ── Ad Revenue Distribution ───────────────────────────────────────────────
+
+    case "RECORD_AD_REVENUE": {
+      // Deduplication: same viewerId+videoId pair only counts once
+      const isDuplicate = state.adRevenueRecords.some(
+        (r) => r.videoId === action.videoId && r.viewerId === action.viewerId,
+      );
+      if (isDuplicate) return state;
+
+      const artistShare = action.revenueAmount * 0.6;
+      const adminShare = action.revenueAmount * 0.4;
+      const revNow = Date.now();
+
+      const newRecord: AdRevenueRecord = {
+        id: `adr${revNow}${Math.random().toString(36).slice(2, 6)}`,
+        videoId: action.videoId,
+        viewerId: action.viewerId,
+        revenueAmount: action.revenueAmount,
+        artistShare,
+        adminShare,
+        createdAt: revNow,
+      };
+
+      // Find the video uploader
+      const revVideo = state.videos.find((v) => v.id === action.videoId);
+      const uploaderId = revVideo?.uploaderId ?? "";
+
+      // Credit artistShare to uploader's pendingEarnings
+      const revUpdatedUsers = state.users.map((u) =>
+        u.id === uploaderId
+          ? {
+              ...u,
+              pendingEarnings: (u.pendingEarnings ?? 0) + artistShare,
+              totalEarnings: (u.totalEarnings ?? 0) + artistShare,
+            }
+          : u,
+      );
+
+      const revUpdatedCurrentUser =
+        state.currentUser?.id === uploaderId
+          ? {
+              ...state.currentUser,
+              pendingEarnings:
+                (state.currentUser.pendingEarnings ?? 0) + artistShare,
+              totalEarnings:
+                (state.currentUser.totalEarnings ?? 0) + artistShare,
+            }
+          : state.currentUser;
+
+      // Record an ad_earnings transaction for the artist
+      const adRevTx: Transaction = {
+        id: `tx${revNow}adrev${Math.random().toString(36).slice(2, 4)}`,
+        userId: uploaderId,
+        txType: "ad_earnings",
+        amount: artistShare,
+        description: `Ad revenue: ${revVideo?.caption?.slice(0, 40) ?? "video"} (₹${action.revenueAmount.toFixed(2)} × 60%)`,
+        createdAt: revNow,
+      };
+
+      return {
+        ...state,
+        adRevenueRecords: [...state.adRevenueRecords, newRecord],
+        adminTotalEarnings: state.adminTotalEarnings + adminShare,
+        users: revUpdatedUsers,
+        currentUser: revUpdatedCurrentUser,
+        transactions: [adRevTx, ...state.transactions],
+      };
+    }
+
     default:
       return state;
   }
@@ -2554,4 +3052,22 @@ export function useUnreadCount(userId: string): number {
 export function useIsFollowing(targetUserId: string): boolean {
   const { state } = useApp();
   return state.followingIds.includes(targetUserId);
+}
+
+// ─── Ad Revenue Utility ───────────────────────────────────────────────────────
+
+export function computeVideoEarnings(
+  videoId: string,
+  records: AdRevenueRecord[],
+  videos: Video[],
+): VideoEarnings {
+  const videoRecords = records.filter((r) => r.videoId === videoId);
+  const video = videos.find((v) => v.id === videoId);
+  return {
+    videoId,
+    totalViews: video?.viewsCount ?? 0,
+    totalAdRevenue: videoRecords.reduce((s, r) => s + r.revenueAmount, 0),
+    artistEarnings: videoRecords.reduce((s, r) => s + r.artistShare, 0),
+    adminEarnings: videoRecords.reduce((s, r) => s + r.adminShare, 0),
+  };
 }

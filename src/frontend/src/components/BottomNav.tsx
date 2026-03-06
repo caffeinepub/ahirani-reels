@@ -2,26 +2,83 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Home, PlusSquare, Search, Trophy, User, Wallet } from "lucide-react";
 import { motion } from "motion/react";
 import { useApp, useBackendConnected } from "../context/AppContext";
+import { useLang } from "../context/LanguageContext";
 import { NotificationBell } from "./NotificationBell";
 
+// ─── Live icon component ──────────────────────────────────────────────────────
+
+function LiveIcon({ isActive }: { isActive: boolean }) {
+  return (
+    <div className="relative flex items-center justify-center w-6 h-6">
+      <span className={`relative flex h-3 w-3 ${isActive ? "" : ""}`}>
+        <span
+          className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+            isActive ? "bg-white" : "bg-red-500"
+          }`}
+        />
+        <span
+          className={`relative inline-flex rounded-full h-3 w-3 ${
+            isActive ? "bg-white" : "bg-red-500"
+          }`}
+        />
+      </span>
+    </div>
+  );
+}
+
 const ALL_NAV_ITEMS = [
-  { to: "/", icon: Home, label: "Home", ocid: "nav.home_link" },
-  { to: "/search", icon: Search, label: "Search", ocid: "nav.search_link" },
+  {
+    to: "/",
+    icon: Home,
+    label: "Home",
+    tKey: "nav.home",
+    ocid: "nav.home_link",
+  },
+  {
+    to: "/search",
+    icon: Search,
+    label: "Search",
+    tKey: "nav.search",
+    ocid: "nav.search_link",
+  },
   {
     to: "/upload",
     icon: PlusSquare,
     label: "Upload",
+    tKey: "nav.upload",
     ocid: "nav.upload_link",
     artistOnly: true,
+  },
+  {
+    to: "/live",
+    icon: null,
+    label: "Live",
+    tKey: "nav.live",
+    ocid: "nav.live_link",
+    artistOnly: true,
+    isLive: true,
   },
   {
     to: "/leaderboard",
     icon: Trophy,
     label: "Ranks",
+    tKey: "nav.ranks",
     ocid: "nav.leaderboard_link",
   },
-  { to: "/wallet", icon: Wallet, label: "Wallet", ocid: "nav.wallet_link" },
-  { to: "/profile", icon: User, label: "Profile", ocid: "nav.profile_link" },
+  {
+    to: "/wallet",
+    icon: Wallet,
+    label: "Wallet",
+    tKey: "nav.wallet",
+    ocid: "nav.wallet_link",
+  },
+  {
+    to: "/profile",
+    icon: User,
+    label: "Profile",
+    tKey: "nav.profile",
+    ocid: "nav.profile_link",
+  },
 ] as const;
 
 export default function BottomNav() {
@@ -29,10 +86,18 @@ export default function BottomNav() {
   const pathname = routerState.location.pathname;
   const isConnected = useBackendConnected();
   const { state } = useApp();
+  const { t } = useLang();
   const currentUser = state.currentUser;
 
   const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => {
     if ("artistOnly" in item && item.artistOnly) {
+      // Only show Live tab for artists with active subscription
+      if ("isLive" in item && item.isLive) {
+        return (
+          currentUser?.role === "artist" &&
+          currentUser?.subscriptionStatus === "active"
+        );
+      }
       return currentUser?.role !== "viewer";
     }
     return true;
@@ -68,7 +133,10 @@ export default function BottomNav() {
       </div>
 
       <div className="flex">
-        {NAV_ITEMS.map(({ to, icon: Icon, label, ocid }) => {
+        {NAV_ITEMS.map((navItem) => {
+          const { to, tKey, ocid } = navItem;
+          const Icon = "icon" in navItem ? navItem.icon : null;
+          const isLiveTab = "isLive" in navItem && navItem.isLive;
           const isActive = pathname === to;
           return (
             <Link
@@ -83,7 +151,9 @@ export default function BottomNav() {
                   className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-reels-pink"
                 />
               )}
-              {to === "/upload" ? (
+              {isLiveTab ? (
+                <LiveIcon isActive={isActive} />
+              ) : to === "/upload" ? (
                 <div
                   className={`w-11 h-8 rounded-lg flex items-center justify-center transition-all ${
                     isActive
@@ -91,21 +161,29 @@ export default function BottomNav() {
                       : "bg-white/15 border border-white/20"
                   }`}
                 >
-                  <Icon className="w-5 h-5 text-white" />
+                  {Icon && <Icon className="w-5 h-5 text-white" />}
                 </div>
               ) : (
-                <Icon
-                  className={`w-6 h-6 transition-colors ${
-                    isActive ? "text-white" : "text-white/50"
-                  }`}
-                />
+                Icon && (
+                  <Icon
+                    className={`w-6 h-6 transition-colors ${
+                      isActive ? "text-white" : "text-white/50"
+                    }`}
+                  />
+                )
               )}
               <span
                 className={`text-[10px] font-medium transition-colors ${
-                  isActive ? "text-white" : "text-white/40"
+                  isActive
+                    ? isLiveTab
+                      ? "text-white"
+                      : "text-white"
+                    : isLiveTab
+                      ? "text-red-400"
+                      : "text-white/40"
                 }`}
               >
-                {label}
+                {t(tKey)}
               </span>
             </Link>
           );

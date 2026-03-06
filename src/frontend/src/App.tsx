@@ -9,12 +9,16 @@ import {
 } from "@tanstack/react-router";
 import BottomNav from "./components/BottomNav";
 import { AppProvider, useApp } from "./context/AppContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import AdminPage from "./pages/AdminPage";
 import AuthPage from "./pages/AuthPage";
 import FeedPage from "./pages/FeedPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
+import LivePage from "./pages/LivePage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import ProfilePage from "./pages/ProfilePage";
 import SearchPage from "./pages/SearchPage";
+import TermsPage from "./pages/TermsPage";
 import UploadPage from "./pages/UploadPage";
 import WalletPage from "./pages/WalletPage";
 
@@ -25,10 +29,14 @@ function RootComponent() {
   const routerState = useRouterState();
   const pathname = routerState.location.pathname;
 
-  // Admin route - no auth guard
-  if (pathname.startsWith("/admin")) {
+  // Admin + Privacy + Terms routes - no auth guard
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/terms")
+  ) {
     return (
-      <div className="phone-frame">
+      <div className="phone-frame overflow-y-auto">
         <Outlet />
       </div>
     );
@@ -101,6 +109,24 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
+const liveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/live",
+  component: LivePage,
+});
+
+const privacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/privacy",
+  component: PrivacyPolicyPage,
+});
+
+const termsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/terms",
+  component: TermsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   uploadRoute,
@@ -109,6 +135,9 @@ const routeTree = rootRoute.addChildren([
   searchRoute,
   leaderboardRoute,
   adminRoute,
+  liveRoute,
+  privacyRoute,
+  termsRoute,
 ]);
 
 const router = createRouter({ routeTree });
@@ -162,20 +191,22 @@ function DesktopWrapper({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <AppProvider>
-      <DesktopWrapper>
-        <RouterProvider router={router} />
-      </DesktopWrapper>
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          style: {
-            background: "oklch(0.15 0 0)",
-            border: "1px solid oklch(0.25 0 0)",
-            color: "white",
-          },
-        }}
-      />
-    </AppProvider>
+    <LanguageProvider>
+      <AppProvider>
+        <DesktopWrapper>
+          <RouterProvider router={router} />
+        </DesktopWrapper>
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: "oklch(0.15 0 0)",
+              border: "1px solid oklch(0.25 0 0)",
+              color: "white",
+            },
+          }}
+        />
+      </AppProvider>
+    </LanguageProvider>
   );
 }

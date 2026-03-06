@@ -50,7 +50,7 @@ import type {
   VideoType,
   WithdrawalRequest,
 } from "../context/AppContext";
-import { useApp } from "../context/AppContext";
+import { computeVideoEarnings, useApp } from "../context/AppContext";
 import { formatCount, formatTime, generateId } from "../utils/trending";
 
 const ADMIN_EMAIL = "admin@ahiranireels.com";
@@ -290,6 +290,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     | "ads"
     | "reports"
     | "security"
+    | "live"
   >("overview");
 
   // Admin upload form state
@@ -305,13 +306,42 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
   const activeVideos = state.videos.filter((v) => !v.isDeleted);
 
-  // Platform earnings calculation
+  // Platform earnings calculation (impression-based: each ad shown = revenue)
   const totalGross = activeVideos.reduce((sum, v) => {
     const rate = state.rpmConfig[v.videoType as VideoType] ?? 2;
-    return sum + (v.viewsCount * rate) / 1000;
+    return sum + ((v.adImpressions ?? 0) * rate) / 1000;
   }, 0);
   const adminShare = totalGross * 0.4;
   const artistPayouts = totalGross * 0.6;
+
+  // Ad impression breakdown by video type
+  const reelImpressions = activeVideos
+    .filter((v) => v.videoType === "reel")
+    .reduce((s, v) => s + (v.adImpressions ?? 0), 0);
+  const longImpressions = activeVideos
+    .filter((v) => v.videoType === "long")
+    .reduce((s, v) => s + (v.adImpressions ?? 0), 0);
+  const premiumImpressions = activeVideos
+    .filter((v) => v.videoType === "premium")
+    .reduce((s, v) => s + (v.adImpressions ?? 0), 0);
+  const totalImpressions =
+    reelImpressions + longImpressions + premiumImpressions;
+
+  const reelGross = (reelImpressions * (state.rpmConfig.reel ?? 2)) / 1000;
+  const longGross = (longImpressions * (state.rpmConfig.long ?? 4)) / 1000;
+  const premiumGross =
+    (premiumImpressions * (state.rpmConfig.premium ?? 8)) / 1000;
+
+  // Top 5 earning creators (by totalEarnings)
+  const topEarningCreators = [...state.users]
+    .filter((u) => u.role === "artist")
+    .sort((a, b) => (b.totalEarnings ?? 0) - (a.totalEarnings ?? 0))
+    .slice(0, 5);
+
+  // Top 5 most viewed videos
+  const topViewedVideos = [...activeVideos]
+    .sort((a, b) => (b.viewsCount ?? 0) - (a.viewsCount ?? 0))
+    .slice(0, 5);
 
   // Approved + paid withdrawals total
   const approvedWithdrawals = state.withdrawalRequests.filter(
@@ -426,6 +456,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     "withdrawals",
     "upload",
     "ads",
+    "live",
     "reports",
     "security",
   ] as const;
@@ -486,6 +517,12 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 {pendingReports.length}
               </span>
             )}
+            {tab === "live" &&
+              state.liveStreams.filter((s) => s.isActive).length > 0 && (
+                <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">
+                  {state.liveStreams.filter((s) => s.isActive).length}
+                </span>
+              )}
           </button>
         ))}
       </div>
@@ -559,6 +596,151 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 </motion.div>
               ))}
             </div>
+
+            {/* Ad Revenue Distribution cards */}
+            <div
+              className="grid grid-cols-3 gap-3"
+              data-ocid="admin.ad_revenue_distribution.section"
+            >
+              {[
+                {
+                  icon: <IndianRupee className="w-4 h-4 text-blue-400" />,
+                  label: "Total Ad Revenue",
+                  value: `₹${state.adRevenueRecords.reduce((s, r) => s + r.revenueAmount, 0).toFixed(2)}`,
+                  sub: `${state.adRevenueRecords.length} records`,
+                  color: "from-blue-600/20 to-blue-600/5",
+                  valueColor: "text-blue-300",
+                  ocid: "admin.total_ad_revenue.card",
+                },
+                {
+                  icon: <IndianRupee className="w-4 h-4 text-emerald-400" />,
+                  label: "Artist Earnings (60%)",
+                  value: `₹${state.adRevenueRecords.reduce((s, r) => s + r.artistShare, 0).toFixed(2)}`,
+                  sub: "Creator share",
+                  color: "from-emerald-600/20 to-emerald-600/5",
+                  valueColor: "text-emerald-400",
+                  ocid: "admin.artist_earnings.card",
+                },
+                {
+                  icon: <IndianRupee className="w-4 h-4 text-purple-400" />,
+                  label: "Admin Earnings (40%)",
+                  value: `₹${(state.adminTotalEarnings ?? 0).toFixed(2)}`,
+                  sub: "Platform profit",
+                  color: "from-purple-600/20 to-purple-600/5",
+                  valueColor: "text-purple-300",
+                  ocid: "admin.admin_earnings.card",
+                },
+              ].map((stat) => (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  data-ocid={stat.ocid}
+                  className={`rounded-2xl bg-gradient-to-br ${stat.color} border border-white/10 p-3`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    {stat.icon}
+                    <span className="text-white/30 text-[10px] text-right leading-tight">
+                      {stat.sub}
+                    </span>
+                  </div>
+                  <p
+                    className={`font-bold text-base font-display ${stat.valueColor}`}
+                  >
+                    {stat.value}
+                  </p>
+                  <p className="text-white/40 text-[10px] mt-0.5 leading-tight">
+                    {stat.label}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Video Earnings Table (top 10 by ad revenue) */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 }}
+              data-ocid="admin.video_earnings.table"
+              className="rounded-2xl border border-white/10 bg-card overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-white font-semibold text-sm">
+                  Video Earnings (Top 10)
+                </h3>
+              </div>
+              {/* Table header */}
+              <div className="px-3 py-2 border-b border-white/5 grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-2 items-center bg-white/3">
+                <span className="text-white/40 text-[10px] font-medium uppercase tracking-wider">
+                  Video
+                </span>
+                <span className="text-white/40 text-[10px] font-medium uppercase tracking-wider w-14 text-right">
+                  Views
+                </span>
+                <span className="text-white/40 text-[10px] font-medium uppercase tracking-wider w-14 text-right">
+                  Ad Rev ₹
+                </span>
+                <span className="text-white/40 text-[10px] font-medium uppercase tracking-wider w-14 text-right">
+                  Artist ₹
+                </span>
+                <span className="text-white/40 text-[10px] font-medium uppercase tracking-wider w-14 text-right">
+                  Admin ₹
+                </span>
+              </div>
+              <div className="divide-y divide-white/5">
+                {[...activeVideos]
+                  .map((v) =>
+                    computeVideoEarnings(
+                      v.id,
+                      state.adRevenueRecords,
+                      state.videos,
+                    ),
+                  )
+                  .sort((a, b) => b.totalAdRevenue - a.totalAdRevenue)
+                  .slice(0, 10)
+                  .map((ve, i) => {
+                    const video = activeVideos.find((v) => v.id === ve.videoId);
+                    if (!video) return null;
+                    return (
+                      <div
+                        key={ve.videoId}
+                        data-ocid={`admin.video_earnings.item.${i + 1}`}
+                        className="px-3 py-2.5 grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-2 items-center"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-white text-[11px] font-medium truncate leading-tight mb-0.5">
+                            {video.caption.length > 30
+                              ? `${video.caption.slice(0, 30)}…`
+                              : video.caption}
+                          </p>
+                          <VideoTypeBadge type={video.videoType} />
+                        </div>
+                        <span className="text-white/50 text-[11px] w-14 text-right tabular-nums">
+                          {formatCount(ve.totalViews)}
+                        </span>
+                        <span className="text-blue-300 text-[11px] w-14 text-right tabular-nums font-semibold">
+                          ₹{ve.totalAdRevenue.toFixed(2)}
+                        </span>
+                        <span className="text-emerald-400 text-[11px] w-14 text-right tabular-nums font-semibold">
+                          ₹{ve.artistEarnings.toFixed(2)}
+                        </span>
+                        <span className="text-purple-400 text-[11px] w-14 text-right tabular-nums font-semibold">
+                          ₹{ve.adminEarnings.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                {activeVideos.length === 0 && (
+                  <div
+                    data-ocid="admin.video_earnings.empty_state"
+                    className="py-8 text-center"
+                  >
+                    <p className="text-white/30 text-sm">No videos yet</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
 
             {/* RPM Configuration card */}
             <motion.div
@@ -737,6 +919,223 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   VideoEarn = (VideoViews × AdRPM) / 1000 · ArtistShare = 60% ·
                   AdminShare = 40%
                 </p>
+              </div>
+            </motion.div>
+
+            {/* Ad Revenue Breakdown */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              data-ocid="admin.ad_revenue.panel"
+              className="rounded-2xl border border-white/10 bg-card p-5 space-y-4"
+            >
+              <div className="flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-reels-pink" />
+                <h3 className="text-white font-semibold">
+                  Ad Revenue Breakdown
+                </h3>
+                <span className="text-white/40 text-xs ml-auto">
+                  {formatCount(totalImpressions)} impressions
+                </span>
+              </div>
+
+              {/* 3 revenue cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div
+                  className="rounded-xl p-3 text-center space-y-1"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.18 0.04 240), oklch(0.12 0.03 240))",
+                    border: "1px solid oklch(0.55 0.15 240 / 0.25)",
+                  }}
+                >
+                  <p className="text-white/50 text-[10px] font-medium uppercase tracking-wider">
+                    Total Ad Revenue
+                  </p>
+                  <p className="text-blue-300 font-bold text-lg font-display">
+                    ₹{totalGross.toFixed(0)}
+                  </p>
+                  <p className="text-white/30 text-[9px]">
+                    {formatCount(totalImpressions)} imp.
+                  </p>
+                </div>
+                <div
+                  className="rounded-xl p-3 text-center space-y-1"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.18 0.04 160), oklch(0.12 0.03 160))",
+                    border: "1px solid oklch(0.55 0.15 160 / 0.25)",
+                  }}
+                >
+                  <p className="text-white/50 text-[10px] font-medium uppercase tracking-wider">
+                    Creator Payouts
+                  </p>
+                  <p className="text-emerald-400 font-bold text-lg font-display">
+                    ₹{artistPayouts.toFixed(0)}
+                  </p>
+                  <p className="text-white/30 text-[9px]">60% share</p>
+                </div>
+                <div
+                  className="rounded-xl p-3 text-center space-y-1"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.18 0.05 70), oklch(0.12 0.03 60))",
+                    border: "1px solid oklch(0.75 0.18 80 / 0.25)",
+                  }}
+                >
+                  <p className="text-white/50 text-[10px] font-medium uppercase tracking-wider">
+                    Platform Earnings
+                  </p>
+                  <p className="text-amber-400 font-bold text-lg font-display">
+                    ₹{adminShare.toFixed(0)}
+                  </p>
+                  <p className="text-white/30 text-[9px]">40% share</p>
+                </div>
+              </div>
+
+              {/* By video type */}
+              <div className="space-y-2">
+                <p className="text-white/40 text-[10px] font-medium uppercase tracking-wider">
+                  Revenue by Type
+                </p>
+                {[
+                  {
+                    label: "Reel",
+                    gross: reelGross,
+                    impressions: reelImpressions,
+                    color: "text-reels-pink",
+                    bar: "bg-reels-pink",
+                  },
+                  {
+                    label: "Long",
+                    gross: longGross,
+                    impressions: longImpressions,
+                    color: "text-blue-400",
+                    bar: "bg-blue-400",
+                  },
+                  {
+                    label: "Premium",
+                    gross: premiumGross,
+                    impressions: premiumImpressions,
+                    color: "text-amber-400",
+                    bar: "bg-amber-400",
+                  },
+                ].map(({ label, gross, impressions, color, bar }) => (
+                  <div key={label} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-medium ${color}`}>
+                        {label}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-white/40 text-[10px]">
+                          {formatCount(impressions)} imp.
+                        </span>
+                        <span className="text-white text-xs font-semibold">
+                          ₹{gross.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${bar} transition-all`}
+                        style={{
+                          width:
+                            totalGross > 0
+                              ? `${(gross / totalGross) * 100}%`
+                              : "0%",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Top 5 earning creators */}
+              <div className="space-y-2">
+                <p className="text-white/40 text-[10px] font-medium uppercase tracking-wider">
+                  Top 5 Earning Creators
+                </p>
+                <div className="space-y-2">
+                  {topEarningCreators.map((u, i) => (
+                    <div
+                      key={u.id}
+                      data-ocid={`admin.top_creator.item.${i + 1}`}
+                      className="flex items-center gap-3"
+                    >
+                      <span className="text-white/30 text-xs w-4 text-center">
+                        {i + 1}
+                      </span>
+                      <Avatar className="w-7 h-7">
+                        <AvatarImage src={u.avatar} />
+                        <AvatarFallback className="text-[10px] bg-white/10 text-white">
+                          {u.username.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-xs font-medium truncate">
+                          @{u.username}
+                        </p>
+                      </div>
+                      <span className="text-emerald-400 text-xs font-bold">
+                        ₹{(u.totalEarnings ?? 0).toFixed(0)}
+                      </span>
+                    </div>
+                  ))}
+                  {topEarningCreators.length === 0 && (
+                    <p className="text-white/30 text-xs text-center py-2">
+                      No artist data yet
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Top 5 most viewed videos */}
+              <div className="space-y-2">
+                <p className="text-white/40 text-[10px] font-medium uppercase tracking-wider">
+                  Top 5 Most Viewed Videos
+                </p>
+                <div className="space-y-2">
+                  {topViewedVideos.map((v, i) => {
+                    const uploader = state.users.find(
+                      (u) => u.id === v.uploaderId,
+                    );
+                    return (
+                      <div
+                        key={v.id}
+                        data-ocid={`admin.top_video.item.${i + 1}`}
+                        className="flex items-center gap-3"
+                      >
+                        <span className="text-white/30 text-xs w-4 text-center">
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-xs font-medium truncate">
+                            {v.caption.length > 36
+                              ? `${v.caption.slice(0, 36)}…`
+                              : v.caption}
+                          </p>
+                          <p className="text-white/40 text-[10px]">
+                            @{uploader?.username ?? "unknown"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-white/70 text-xs font-semibold">
+                            {formatCount(v.viewsCount ?? 0)} views
+                          </p>
+                          <p className="text-reels-pink text-[10px]">
+                            {formatCount(v.adImpressions ?? 0)} imp.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {topViewedVideos.length === 0 && (
+                    <p className="text-white/30 text-xs text-center py-2">
+                      No videos yet
+                    </p>
+                  )}
+                </div>
               </div>
             </motion.div>
 
@@ -1050,9 +1449,28 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                           @{uploader?.username ?? "unknown"}
                         </TableCell>
                         <TableCell>
-                          <VideoTypeBadge
-                            type={(video.videoType as VideoType) ?? "reel"}
-                          />
+                          <div className="flex flex-col gap-1">
+                            <VideoTypeBadge
+                              type={(video.videoType as VideoType) ?? "reel"}
+                            />
+                            {video.isPromoted &&
+                              video.promotionExpiry &&
+                              video.promotionExpiry > Date.now() && (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[9px] px-1.5 py-0"
+                                  style={{
+                                    background: "oklch(0.4 0.2 280 / 0.3)",
+                                    color: "oklch(0.8 0.15 280)",
+                                    borderColor: "oklch(0.5 0.2 280 / 0.3)",
+                                  }}
+                                >
+                                  🚀{" "}
+                                  {(video.promotedReach ?? 0).toLocaleString()}{" "}
+                                  reach
+                                </Badge>
+                              )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5">
@@ -2372,6 +2790,138 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                                 Dismiss
                               </Button>
                             </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        )}
+        {/* Live Streams tab */}
+        {activeTab === "live" && (
+          <div className="space-y-4" data-ocid="admin.live.panel">
+            <div className="flex items-center justify-between">
+              <h2 className="text-white/60 text-sm font-medium uppercase tracking-wider">
+                Live Streams
+              </h2>
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                </span>
+                <span className="text-red-400 text-xs font-semibold">
+                  {state.liveStreams.filter((s) => s.isActive).length} active
+                </span>
+              </div>
+            </div>
+
+            {state.liveStreams.length === 0 ? (
+              <div
+                data-ocid="admin.live.empty_state"
+                className="text-center py-12 text-white/30 text-sm"
+              >
+                No live streams yet.
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/10 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-white/60">Artist</TableHead>
+                      <TableHead className="text-white/60">Title</TableHead>
+                      <TableHead className="text-white/60">Started</TableHead>
+                      <TableHead className="text-white/60">Status</TableHead>
+                      <TableHead className="text-white/60">Viewers</TableHead>
+                      <TableHead className="text-white/60 text-right">
+                        Action
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {state.liveStreams.map((stream, i) => {
+                      const artist = state.users.find(
+                        (u) => u.id === stream.artistId,
+                      );
+                      const ocidIndex = i + 1;
+                      const startedMinsAgo = Math.floor(
+                        (Date.now() - stream.startedAt) / 60000,
+                      );
+                      return (
+                        <TableRow
+                          key={stream.id}
+                          data-ocid={`admin.live.item.${ocidIndex}`}
+                          className="border-white/5 hover:bg-white/5"
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="w-7 h-7">
+                                <AvatarImage src={artist?.avatar} />
+                                <AvatarFallback className="bg-white/10 text-white text-[10px]">
+                                  {artist?.username?.[0]?.toUpperCase() ?? "A"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-white/80 text-xs font-medium">
+                                @{artist?.username ?? "unknown"}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-white text-xs line-clamp-1 max-w-[140px]">
+                              {stream.title}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-white/40 text-xs">
+                            {startedMinsAgo < 60
+                              ? `${startedMinsAgo}m ago`
+                              : `${Math.floor(startedMinsAgo / 60)}h ago`}
+                          </TableCell>
+                          <TableCell>
+                            {stream.isActive ? (
+                              <Badge className="bg-red-500 text-white border-0 text-[10px] font-bold">
+                                🔴 LIVE
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] bg-white/10 text-white/40 border-white/10"
+                              >
+                                Ended
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-white/70 text-xs">
+                            👁 {stream.viewerCount.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {stream.isActive ? (
+                              <Button
+                                data-ocid={`admin.live.end_button.${ocidIndex}`}
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  dispatch({
+                                    type: "END_LIVE",
+                                    streamId: stream.id,
+                                  });
+                                  toast.success(
+                                    `Stream by @${artist?.username ?? "artist"} ended`,
+                                  );
+                                }}
+                                className="text-red-400 hover:text-red-300 hover:bg-red-400/10 text-xs h-7 px-2"
+                              >
+                                <Pause className="w-3.5 h-3.5 mr-1" />
+                                End Stream
+                              </Button>
+                            ) : (
+                              <span className="text-white/20 text-xs">
+                                {stream.endedAt
+                                  ? `Ended ${Math.floor((Date.now() - (stream.endedAt ?? 0)) / 60000)}m ago`
+                                  : "Ended"}
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

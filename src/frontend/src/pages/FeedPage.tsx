@@ -14,6 +14,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Clock,
   Crown,
@@ -26,6 +27,7 @@ import {
   MessageCircle,
   MoreVertical,
   Music,
+  Radio,
   Search,
   Send,
   Share2,
@@ -38,6 +40,8 @@ import { toast } from "sonner";
 import { ArtistProfileSheet } from "../components/ArtistProfileSheet";
 import { ArtistSearchSheet } from "../components/ArtistSearchSheet";
 import CreatorBadge from "../components/CreatorBadge";
+import { GiftButton } from "../components/GiftPanel";
+import PromoteSheet from "../components/PromoteSheet";
 import { ShareSheet } from "../components/ShareSheet";
 import { BannerAd } from "../components/ads/BannerAd";
 import { InterstitialAd } from "../components/ads/InterstitialAd";
@@ -50,6 +54,7 @@ import {
   useVideoComments,
 } from "../context/AppContext";
 import type { LocalAd, Video, VideoType } from "../context/AppContext";
+import { useLang } from "../context/LanguageContext";
 import {
   formatCount,
   formatTime,
@@ -209,9 +214,16 @@ function ReelCard({
   const [commentOpen, setCommentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
+  const [promoteOpen, setPromoteOpen] = useState(false);
   const isFollowing = useIsFollowing(video.uploaderId);
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const ocidIndex = index + 1;
+
+  // Check if promotion is active
+  const isActivePromotion =
+    video.isPromoted &&
+    video.promotionExpiry &&
+    video.promotionExpiry > Date.now();
 
   // Autoplay control
   useEffect(() => {
@@ -347,8 +359,28 @@ function ReelCard({
         </div>
       )}
 
+      {/* Sponsored badge (top-left) */}
+      {isActivePromotion && (
+        <div className="absolute top-4 left-3 z-10 flex items-center gap-2">
+          <Badge
+            variant="secondary"
+            className="text-[9px] px-2 py-0.5 font-bold tracking-wide"
+            style={{
+              background: "oklch(0.55 0.18 60 / 0.9)",
+              color: "white",
+              borderColor: "transparent",
+            }}
+          >
+            ✦ Sponsored
+          </Badge>
+        </div>
+      )}
+
       {/* Video type badge + report dropdown */}
-      <div className="absolute top-4 left-3 z-10 flex items-center gap-2">
+      <div
+        className="absolute z-10 flex items-center gap-2"
+        style={{ top: isActivePromotion ? "2.5rem" : "1rem", left: "0.75rem" }}
+      >
         <VideoTypeBadge type={video.videoType ?? "reel"} />
       </div>
 
@@ -464,6 +496,30 @@ function ReelCard({
             {formatCount(currentViews)}
           </span>
         </div>
+
+        {/* Gift button (not on own video) */}
+        {!isCurrentUserVideo && (
+          <GiftButton
+            artistId={video.uploaderId}
+            videoId={video.id}
+            size="md"
+          />
+        )}
+
+        {/* Promote button (only for own videos) */}
+        {isCurrentUserVideo && (
+          <button
+            type="button"
+            data-ocid={`feed.promote_button.${ocidIndex}`}
+            onClick={() => setPromoteOpen(true)}
+            className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+          >
+            <span className="text-2xl">🚀</span>
+            <span className="text-white text-xs font-semibold drop-shadow">
+              {isActivePromotion ? "Boosted" : "Promote"}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Bottom overlay */}
@@ -560,6 +616,15 @@ function ReelCard({
         open={profileSheetOpen}
         onClose={() => setProfileSheetOpen(false)}
       />
+
+      {/* Promote sheet (own videos only) */}
+      {isCurrentUserVideo && (
+        <PromoteSheet
+          videoId={video.id}
+          open={promoteOpen}
+          onClose={() => setPromoteOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -581,7 +646,13 @@ function VideoCard({
   const [shareOpen, setShareOpen] = useState(false);
   const [likePulse, setLikePulse] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
+  const [promoteOpen, setPromoteOpen] = useState(false);
   const ocidIndex = index + 1;
+  const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
+  const isActivePromotion =
+    video.isPromoted &&
+    video.promotionExpiry &&
+    video.promotionExpiry > Date.now();
 
   const isLocked =
     isPremiumTab && state.currentUser?.subscriptionStatus !== "active";
@@ -646,8 +717,27 @@ function VideoCard({
           "linear-gradient(135deg, oklch(0.12 0.02 240 / 0.9), oklch(0.08 0.01 240 / 0.95))",
         backdropFilter: "blur(12px)",
         minHeight: 180,
+        borderColor: isActivePromotion
+          ? "oklch(0.55 0.18 60 / 0.4)"
+          : undefined,
       }}
     >
+      {/* Sponsored badge */}
+      {isActivePromotion && (
+        <div className="absolute top-2 left-2 z-10">
+          <Badge
+            variant="secondary"
+            className="text-[9px] px-1.5 py-0.5 font-bold"
+            style={{
+              background: "oklch(0.55 0.18 60 / 0.9)",
+              color: "white",
+              borderColor: "transparent",
+            }}
+          >
+            ✦ Sponsored
+          </Badge>
+        </div>
+      )}
       <div className="flex gap-0">
         {/* Thumbnail / video preview column */}
         <div
@@ -810,15 +900,44 @@ function VideoCard({
               </button>
             </div>
 
-            {/* Share */}
-            <button
-              type="button"
-              data-ocid={`feed.share_button.${ocidIndex}`}
-              onClick={() => setShareOpen(true)}
-              className="text-white/40 hover:text-white/70 transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-            </button>
+            {/* Right side actions */}
+            <div className="flex items-center gap-2">
+              {/* Share */}
+              <button
+                type="button"
+                data-ocid={`feed.share_button.${ocidIndex}`}
+                onClick={() => setShareOpen(true)}
+                className="text-white/40 hover:text-white/70 transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Gift button (not on own video) */}
+              {!isCurrentUserVideo && (
+                <GiftButton
+                  artistId={video.uploaderId}
+                  videoId={video.id}
+                  size="sm"
+                />
+              )}
+
+              {/* Promote button (own videos) */}
+              {isCurrentUserVideo && (
+                <button
+                  type="button"
+                  data-ocid={`feed.promote_button.${ocidIndex}`}
+                  onClick={() => setPromoteOpen(true)}
+                  className="text-[11px] font-semibold transition-colors"
+                  style={{
+                    color: isActivePromotion
+                      ? "oklch(0.7 0.15 60)"
+                      : "rgba(255,255,255,0.4)",
+                  }}
+                >
+                  {isActivePromotion ? "✦ Boosted" : "🚀 Promote"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -880,6 +999,15 @@ function VideoCard({
         open={profileSheetOpen}
         onClose={() => setProfileSheetOpen(false)}
       />
+
+      {/* Promote sheet (own videos only) */}
+      {isCurrentUserVideo && (
+        <PromoteSheet
+          videoId={video.id}
+          open={promoteOpen}
+          onClose={() => setPromoteOpen(false)}
+        />
+      )}
     </motion.div>
   );
 }
@@ -933,6 +1061,8 @@ type FeedTab = "foryou" | "trending" | "long" | "premium" | "following";
 
 export default function FeedPage() {
   const { state, dispatch } = useApp();
+  const navigate = useNavigate();
+  const { t } = useLang();
   const [activeIndex, setActiveIndex] = useState(0);
   const [showAd, setShowAd] = useState(false);
   const [activeTab, setActiveTab] = useState<FeedTab>("foryou");
@@ -941,6 +1071,11 @@ export default function FeedPage() {
   const preRolledVideosRef = useRef<Set<string>>(new Set());
   const videosScrolledRef = useRef(0);
   const feedRef = useRef<HTMLDivElement>(null);
+
+  const activeLiveStreams = state.liveStreams.filter((s) => s.isActive);
+  const isArtistWithActiveSub =
+    state.currentUser?.role === "artist" &&
+    state.currentUser?.subscriptionStatus === "active";
 
   const feed = getTrendingFeed(
     state.videos,
@@ -958,17 +1093,24 @@ export default function FeedPage() {
     .filter((v) => !v.isDeleted && state.followingIds.includes(v.uploaderId))
     .sort((a, b) => b.createdAt - a.createdAt);
 
-  // Trending feed: sorted purely by engagement (likes*1.5 + comments*2 + views*0.1 + shares*5)
+  // Trending feed: sorted by engagement + promoted boost
   const trendingFeed = state.videos
     .filter((v) => !v.isDeleted)
-    .map((v) => ({
-      video: v,
-      score:
-        v.likesCount * 1.5 +
-        v.commentsCount * 2.0 +
-        v.viewsCount * 0.1 +
-        (v.shareCount ?? 0) * 5,
-    }))
+    .map((v) => {
+      const promotionBoost =
+        v.isPromoted && v.promotionExpiry && v.promotionExpiry > Date.now()
+          ? 500
+          : 0;
+      return {
+        video: v,
+        score:
+          v.likesCount * 1.5 +
+          v.commentsCount * 2.0 +
+          v.viewsCount * 0.1 +
+          (v.shareCount ?? 0) * 5 +
+          promotionBoost,
+      };
+    })
     .sort((a, b) => b.score - a.score)
     .map((s) => s.video);
   const localAds: LocalAd[] = state.localAds ?? [];
@@ -1001,6 +1143,12 @@ export default function FeedPage() {
         setPreRollVideoId(id);
         // Track ad impression when a pre-roll fires for this video
         dispatch({ type: "TRACK_AD_IMPRESSION", videoId: id });
+        dispatch({
+          type: "RECORD_AD_REVENUE",
+          videoId: id,
+          viewerId: state.currentUser?.id ?? "anonymous",
+          revenueAmount: 1,
+        });
         // The actual TRACK_SEEN dispatch happens after pre-roll completes
         return;
       }
@@ -1008,6 +1156,12 @@ export default function FeedPage() {
       dispatch({ type: "TRACK_SEEN", videoId: id });
       // Track ad impression every time a video is seen (banner ad is always shown)
       dispatch({ type: "TRACK_AD_IMPRESSION", videoId: id });
+      dispatch({
+        type: "RECORD_AD_REVENUE",
+        videoId: id,
+        viewerId: state.currentUser?.id ?? "anonymous",
+        revenueAmount: 1,
+      });
       // Track viewer referral progress (counts toward 3-video condition)
       if (state.currentUser) {
         dispatch({
@@ -1086,11 +1240,19 @@ export default function FeedPage() {
 
   // Tab config
   const TABS: { id: FeedTab; label: string; ocid: string }[] = [
-    { id: "foryou", label: "For You", ocid: "feed.foryou.tab" },
-    { id: "trending", label: "🔥 Trending", ocid: "feed.trending.tab" },
-    { id: "following", label: "Following", ocid: "feed.following.tab" },
-    { id: "long", label: "Long", ocid: "feed.long.tab" },
-    { id: "premium", label: "Premium ✦", ocid: "feed.premium.tab" },
+    { id: "foryou", label: t("feed.for_you"), ocid: "feed.foryou.tab" },
+    {
+      id: "trending",
+      label: `🔥 ${t("feed.trending")}`,
+      ocid: "feed.trending.tab",
+    },
+    { id: "following", label: t("feed.following"), ocid: "feed.following.tab" },
+    { id: "long", label: t("feed.long"), ocid: "feed.long.tab" },
+    {
+      id: "premium",
+      label: `${t("feed.premium")} ✦`,
+      ocid: "feed.premium.tab",
+    },
   ];
 
   return (
@@ -1173,9 +1335,105 @@ export default function FeedPage() {
             transition={{ duration: 0.2 }}
             className="w-full h-full"
           >
-            {/* Local ad banner below tab bar, above feed */}
-            <div className="absolute top-12 left-0 right-0 z-20 px-4 pt-2 pb-1 pointer-events-auto">
-              <LocalAdBanner ads={localAds} />
+            {/* Local ad banner + LIVE NOW section + Go Live button */}
+            <div className="absolute top-12 left-0 right-0 z-20 pointer-events-auto space-y-1">
+              {/* LIVE NOW section */}
+              {activeLiveStreams.length > 0 && (
+                <div className="px-4 pt-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                    </span>
+                    <span className="text-red-400 font-bold text-xs tracking-widest uppercase">
+                      Live Now
+                    </span>
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+                    {activeLiveStreams.map((stream) => {
+                      const artist = state.users.find(
+                        (u) => u.id === stream.artistId,
+                      );
+                      return (
+                        <button
+                          key={stream.id}
+                          type="button"
+                          data-ocid={"feed.live.button"}
+                          onClick={() =>
+                            navigate({
+                              to: "/live",
+                              search: { streamId: stream.id } as Record<
+                                string,
+                                string
+                              >,
+                            })
+                          }
+                          className="flex flex-col items-center gap-1 flex-shrink-0 active:scale-95 transition-transform"
+                        >
+                          <div className="relative">
+                            <div
+                              className="w-14 h-14 rounded-full overflow-hidden border-2 border-red-500"
+                              style={{
+                                boxShadow: "0 0 0 2px oklch(0.5 0.25 15 / 0.5)",
+                              }}
+                            >
+                              {artist?.avatar ? (
+                                <img
+                                  src={artist.avatar}
+                                  alt={artist.username}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-bold text-lg">
+                                  {artist?.username?.[0]?.toUpperCase() ?? "A"}
+                                </div>
+                              )}
+                            </div>
+                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2">
+                              <Badge className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0 border-0">
+                                LIVE
+                              </Badge>
+                            </div>
+                          </div>
+                          <span className="text-white/70 text-[10px] font-medium max-w-[56px] truncate">
+                            @{artist?.username ?? "artist"}
+                          </span>
+                          <span className="text-white/40 text-[9px]">
+                            👁 {stream.viewerCount.toLocaleString()}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Go Live button for artists */}
+              {isArtistWithActiveSub && (
+                <div className="px-4 pt-1 pb-1 flex justify-end">
+                  <button
+                    type="button"
+                    data-ocid="feed.go_live.button"
+                    onClick={() => navigate({ to: "/live" })}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-xs text-white transition-all active:scale-95"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, oklch(0.5 0.25 15), oklch(0.45 0.22 5))",
+                    }}
+                  >
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                    </span>
+                    Go Live
+                  </button>
+                </div>
+              )}
+
+              {/* Local ad banner */}
+              <div className="px-4 pb-1">
+                <LocalAdBanner ads={localAds} />
+              </div>
             </div>
 
             <div ref={feedRef} className="feed-container h-full">

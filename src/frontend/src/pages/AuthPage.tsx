@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
   Clapperboard,
@@ -17,9 +17,11 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import LanguageSwitcher from "../components/LanguageSwitcher";
 import type { Transaction } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
 import type { UserRole, User as UserType } from "../context/AppContext";
+import { useLang } from "../context/LanguageContext";
 import { getReferralCodeFromUrl } from "../hooks/useReferralShare";
 import { generateId, generateReferralCode } from "../utils/trending";
 
@@ -38,6 +40,7 @@ type SocialProvider = "google" | "facebook";
 export default function AuthPage() {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
+  const { t } = useLang();
   const [step, setStep] = useState<Step>("method");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -450,12 +453,15 @@ export default function AuthPage() {
           onContextMenu={(e) => e.preventDefault()}
           className="relative w-20 h-20 rounded-2xl flex items-center justify-center mb-4 select-none cursor-pointer"
           style={{
-            background:
-              "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
             WebkitUserSelect: "none",
           }}
         >
-          <span className="text-3xl">🎬</span>
+          <img
+            src="/assets/generated/fakt-ahirani-logo.dim_400x400.png"
+            alt="फक्त अहिराणी"
+            className="w-full h-full object-cover rounded-2xl"
+            draggable={false}
+          />
           {logoPressProgress > 0 && (
             <svg
               className="absolute inset-0 w-full h-full rounded-2xl pointer-events-none"
@@ -490,9 +496,10 @@ export default function AuthPage() {
         <h1 className="font-display text-3xl font-bold text-white tracking-tight">
           फक्त अहिराणी
         </h1>
-        <p className="text-sm text-white/50 mt-1">
-          अहिराणी कलाकार आणि प्रेक्षकांसाठी खास रील प्लॅटफॉर्म
+        <p className="text-sm text-white/50 mt-1 text-center px-2">
+          {t("auth.tagline")}
         </p>
+        <LanguageSwitcher className="mt-4" />
       </motion.div>
 
       {/* Form Card */}
@@ -527,7 +534,7 @@ export default function AuthPage() {
                   📱
                 </span>
                 <span className="text-white font-medium text-sm">
-                  Continue with Mobile OTP
+                  {t("auth.mobile_otp")}
                 </span>
                 <ArrowRight className="w-4 h-4 text-white/40 ml-auto" />
               </button>
@@ -547,7 +554,7 @@ export default function AuthPage() {
                   ✉️
                 </span>
                 <span className="text-white font-medium text-sm">
-                  Login with Email
+                  {t("auth.email_login")}
                 </span>
                 <ArrowRight className="w-4 h-4 text-white/40 ml-auto" />
               </button>
@@ -564,7 +571,7 @@ export default function AuthPage() {
                   👤
                 </span>
                 <span className="text-white font-medium text-sm">
-                  Login with Username
+                  {t("auth.username_login")}
                 </span>
                 <ArrowRight className="w-4 h-4 text-white/40 ml-auto" />
               </button>
@@ -614,7 +621,7 @@ export default function AuthPage() {
                   />
                 </svg>
                 <span className="text-gray-800 font-medium text-sm">
-                  Continue with Google
+                  {t("auth.google")}
                 </span>
               </button>
 
@@ -636,7 +643,7 @@ export default function AuthPage() {
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                 </svg>
                 <span className="text-white font-medium text-sm">
-                  Continue with Facebook
+                  {t("auth.facebook")}
                 </span>
               </button>
             </motion.div>
@@ -1281,7 +1288,36 @@ export default function AuthPage() {
 
       {/* Footer */}
       <p className="text-xs text-white/20 text-center mt-12">
-        By continuing, you agree to our Terms &amp; Privacy Policy
+        By continuing, you agree to our{" "}
+        <Link
+          to="/terms"
+          data-ocid="auth.terms_link"
+          className="text-white/40 underline underline-offset-2 hover:text-white/60 transition-colors"
+        >
+          Terms &amp; Conditions
+        </Link>{" "}
+        and{" "}
+        <Link
+          to="/privacy"
+          data-ocid="auth.privacy_policy_link"
+          className="text-white/40 underline underline-offset-2 hover:text-white/60 transition-colors"
+        >
+          Privacy Policy
+        </Link>
+        <br />
+        <Link
+          to="/terms"
+          className="text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors"
+        >
+          नियम व अटी
+        </Link>
+        {" / "}
+        <Link
+          to="/privacy"
+          className="text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors"
+        >
+          गोपनीयता धोरण
+        </Link>
       </p>
     </div>
   );

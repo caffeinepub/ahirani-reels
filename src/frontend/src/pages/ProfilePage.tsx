@@ -9,6 +9,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Camera,
@@ -19,6 +20,7 @@ import {
   Crown,
   Edit2,
   Eye,
+  FileText,
   Gift,
   Grid2X2,
   Heart,
@@ -33,8 +35,10 @@ import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import CreatorBadge from "../components/CreatorBadge";
+import LanguageSwitcher from "../components/LanguageSwitcher";
 import { useApp } from "../context/AppContext";
 import type { SubscriptionStatus, User, UserRole } from "../context/AppContext";
+import { useLang } from "../context/LanguageContext";
 import { getReferralLink, shareReferralLink } from "../hooks/useReferralShare";
 import { formatCount } from "../utils/trending";
 
@@ -559,6 +563,7 @@ function EditProfileSheet({
 
 export default function ProfilePage() {
   const { state, dispatch } = useApp();
+  const { t } = useLang();
   const user = state.currentUser;
   const [editOpen, setEditOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -587,12 +592,16 @@ export default function ProfilePage() {
   return (
     <div className="h-full overflow-y-auto bg-background">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-white/10 px-4 py-4 flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-white">Profile</h1>
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between gap-2">
+        <h1 className="font-display text-xl font-bold text-white shrink-0">
+          {t("profile.title")}
+        </h1>
+        <LanguageSwitcher className="flex-1 justify-center" />
         <button
           type="button"
           onClick={handleLogout}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors shrink-0"
+          title={t("profile.logout")}
         >
           <Settings className="w-4 h-4 text-white/70" />
         </button>
@@ -771,6 +780,27 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Footer: Terms & Privacy links */}
+      <div className="px-5 py-4 border-t border-white/8 flex items-center justify-center gap-4">
+        <Link
+          to="/terms"
+          data-ocid="profile.terms_link"
+          className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/50 transition-colors"
+        >
+          <FileText className="w-3 h-3" />
+          Terms / नियम व अटी
+        </Link>
+        <span className="text-white/15 text-xs">·</span>
+        <Link
+          to="/privacy"
+          data-ocid="profile.privacy_policy_link"
+          className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/50 transition-colors"
+        >
+          <Shield className="w-3 h-3" />
+          Privacy / गोपनीयता
+        </Link>
       </div>
 
       {/* Edit Profile Sheet */}
