@@ -2,15 +2,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowRight,
+  Ban,
   Clapperboard,
   Eye,
+  Flag,
   Gift,
   Loader2,
   Lock,
   Mail,
+  MessageSquareX,
   Phone,
   RotateCcw,
+  Shield,
   Sparkles,
   User,
 } from "lucide-react";
@@ -33,7 +38,8 @@ type Step =
   | "username_login"
   | "social_loading"
   | "username"
-  | "role";
+  | "role"
+  | "age_policy";
 
 type SocialProvider = "google" | "facebook";
 
@@ -63,6 +69,10 @@ export default function AuthPage() {
   // Username login
   const [usernameLoginInput, setUsernameLoginInput] = useState("");
   const [passwordLoginInput, setPasswordLoginInput] = useState("");
+
+  // Age policy checkboxes
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [rulesConfirmed, setRulesConfirmed] = useState(false);
 
   // Social provider tracking
   const [socialProvider, setSocialProvider] =
@@ -1257,9 +1267,170 @@ export default function AuthPage() {
 
               <Button
                 data-ocid="auth.role_continue_button"
-                onClick={handleCreateAccount}
+                onClick={() => setStep("age_policy")}
                 disabled={loading}
                 className="w-full h-12 font-semibold text-base"
+                style={gradientStyle}
+              >
+                <span className="flex items-center gap-2">
+                  Continue <ArrowRight className="w-4 h-4" />
+                </span>
+              </Button>
+
+              <button
+                type="button"
+                onClick={() => setStep("username")}
+                className="text-sm text-white/40 w-full text-center"
+              >
+                ← Back
+              </button>
+            </motion.div>
+          )}
+
+          {/* ── AGE POLICY ───────────────────────────────────────────── */}
+          {step === "age_policy" && (
+            <motion.div
+              key="age_policy"
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              className="space-y-4"
+            >
+              {/* Header */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-amber-400" />
+                  <h2 className="text-xl font-semibold text-white">
+                    Platform Rules & Age Policy
+                  </h2>
+                </div>
+                <p className="text-sm text-white/50">वय आणि नियम</p>
+              </div>
+
+              {/* 13+ badge */}
+              <div
+                className="rounded-2xl p-4 border border-amber-500/25 flex items-center gap-4"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.65 0.18 60 / 0.12), oklch(0.55 0.22 30 / 0.08))",
+                }}
+              >
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 text-white font-black text-xl"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.65 0.22 50), oklch(0.55 0.28 20))",
+                  }}
+                >
+                  13+
+                </div>
+                <div>
+                  <p className="text-white font-semibold text-sm">
+                    This platform is for ages 13 and above
+                  </p>
+                  <p className="text-white/50 text-xs mt-0.5">
+                    हे ॲप १३+ वयाच्या व्यक्तींसाठी आहे
+                  </p>
+                </div>
+              </div>
+
+              {/* Rules list */}
+              <div className="space-y-2">
+                <p className="text-white/50 text-xs font-medium uppercase tracking-wider">
+                  Platform Rules / प्लॅटफॉर्म नियम
+                </p>
+                {[
+                  {
+                    icon: <Ban className="w-3.5 h-3.5 text-rose-400" />,
+                    en: "No Nudity",
+                    mr: "नग्नता नाही",
+                    bg: "bg-rose-500/10 border-rose-500/20",
+                  },
+                  {
+                    icon: (
+                      <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />
+                    ),
+                    en: "No Violence",
+                    mr: "हिंसा नाही",
+                    bg: "bg-orange-500/10 border-orange-500/20",
+                  },
+                  {
+                    icon: <Flag className="w-3.5 h-3.5 text-red-400" />,
+                    en: "No Illegal Content",
+                    mr: "बेकायदेशीर सामग्री नाही",
+                    bg: "bg-red-500/10 border-red-500/20",
+                  },
+                  {
+                    icon: (
+                      <MessageSquareX className="w-3.5 h-3.5 text-amber-400" />
+                    ),
+                    en: "No Hate Speech",
+                    mr: "द्वेषपूर्ण भाषण नाही",
+                    bg: "bg-amber-500/10 border-amber-500/20",
+                  },
+                ].map((rule) => (
+                  <div
+                    key={rule.en}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${rule.bg}`}
+                  >
+                    <span className="shrink-0">{rule.icon}</span>
+                    <div>
+                      <p className="text-white text-xs font-semibold">
+                        {rule.en}
+                      </p>
+                      <p className="text-white/40 text-[11px]">{rule.mr}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Checkboxes */}
+              <div className="space-y-3 pt-1">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    data-ocid="auth.age_confirm_checkbox"
+                    checked={ageConfirmed}
+                    onChange={(e) => setAgeConfirmed(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded accent-amber-500 shrink-0"
+                  />
+                  <span className="text-sm text-white/70 group-hover:text-white/90 transition-colors leading-snug">
+                    I confirm I am{" "}
+                    <strong className="text-amber-400">
+                      13 years or older
+                    </strong>
+                    <br />
+                    <span className="text-white/40 text-xs">
+                      मी १३ वर्षांपेक्षा मोठा/मोठी आहे
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    data-ocid="auth.rules_confirm_checkbox"
+                    checked={rulesConfirmed}
+                    onChange={(e) => setRulesConfirmed(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded accent-amber-500 shrink-0"
+                  />
+                  <span className="text-sm text-white/70 group-hover:text-white/90 transition-colors leading-snug">
+                    I agree to follow the{" "}
+                    <strong className="text-white">platform rules</strong> above
+                    <br />
+                    <span className="text-white/40 text-xs">
+                      मी प्लॅटफॉर्मचे नियम पाळण्यास सहमत आहे
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {/* Continue button */}
+              <Button
+                data-ocid="auth.age_policy_continue_button"
+                onClick={handleCreateAccount}
+                disabled={loading || !ageConfirmed || !rulesConfirmed}
+                className="w-full h-12 font-semibold text-base disabled:opacity-40 disabled:cursor-not-allowed"
                 style={gradientStyle}
               >
                 {loading ? (
@@ -1269,14 +1440,14 @@ export default function AuthPage() {
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    Continue <ArrowRight className="w-4 h-4" />
+                    Create Account <ArrowRight className="w-4 h-4" />
                   </span>
                 )}
               </Button>
 
               <button
                 type="button"
-                onClick={() => setStep("username")}
+                onClick={() => setStep("role")}
                 className="text-sm text-white/40 w-full text-center"
               >
                 ← Back
@@ -1317,6 +1488,30 @@ export default function AuthPage() {
           className="text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors"
         >
           गोपनीयता धोरण
+        </Link>
+        {" · "}
+        <Link
+          to="/contact"
+          data-ocid="auth.contact_link"
+          className="text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors"
+        >
+          Contact / संपर्क
+        </Link>
+        {" · "}
+        <Link
+          to="/age-policy"
+          data-ocid="auth.age_policy_link"
+          className="text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors"
+        >
+          Age Policy / वय धोरण
+        </Link>
+        {" · "}
+        <Link
+          to="/about"
+          data-ocid="auth.about_link"
+          className="text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors"
+        >
+          About / आमच्याबद्दल
         </Link>
       </p>
     </div>

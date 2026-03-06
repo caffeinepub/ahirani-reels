@@ -23,7 +23,9 @@ import {
   FileText,
   Gift,
   Grid2X2,
+  Headphones,
   Heart,
+  Info,
   Settings,
   Share2,
   Shield,
@@ -782,8 +784,8 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Footer: Terms & Privacy links */}
-      <div className="px-5 py-4 border-t border-white/8 flex items-center justify-center gap-4">
+      {/* Footer: Terms, Privacy & Contact links */}
+      <div className="px-5 py-4 border-t border-white/8 flex items-center justify-center gap-3 flex-wrap">
         <Link
           to="/terms"
           data-ocid="profile.terms_link"
@@ -800,6 +802,24 @@ export default function ProfilePage() {
         >
           <Shield className="w-3 h-3" />
           Privacy / गोपनीयता
+        </Link>
+        <span className="text-white/15 text-xs">·</span>
+        <Link
+          to="/contact"
+          data-ocid="profile.contact_link"
+          className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/50 transition-colors"
+        >
+          <Headphones className="w-3 h-3" />
+          Contact / संपर्क
+        </Link>
+        <span className="text-white/15 text-xs">·</span>
+        <Link
+          to="/about"
+          data-ocid="profile.about_link"
+          className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/50 transition-colors"
+        >
+          <Info className="w-3 h-3" />
+          About / आमच्याबद्दल
         </Link>
       </div>
 

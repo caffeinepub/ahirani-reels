@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { LocalAd } from "../../context/AppContext";
-import { AD_ENABLED, GOOGLE_AD_SLOTS, META_AD_SLOTS } from "./ads-config";
+import { useApp } from "../../context/AppContext";
+import { AD_ENABLED } from "./ads-config";
 
 interface PreRollAdProps {
   onComplete: () => void;
@@ -9,6 +10,8 @@ interface PreRollAdProps {
 }
 
 export function PreRollAd({ onComplete, ads }: PreRollAdProps) {
+  const { state } = useApp();
+  const adUnitIds = state.adUnitIds;
   const activeAds = ads.filter((a) => a.isActive);
   const [ad] = useState<LocalAd | null>(() => {
     if (activeAds.length === 0) return null;
@@ -74,12 +77,12 @@ export function PreRollAd({ onComplete, ads }: PreRollAdProps) {
           </span>
           {adSource === "google" && (
             <span className="bg-white/10 text-white/60 text-[9px] font-medium px-2 py-0.5 rounded-full border border-white/10">
-              Google Ads · {GOOGLE_AD_SLOTS.PRE_ROLL}
+              Google Ads · {adUnitIds.google.PRE_ROLL}
             </span>
           )}
           {adSource === "meta" && (
             <span className="bg-white/10 text-white/60 text-[9px] font-medium px-2 py-0.5 rounded-full border border-white/10">
-              Meta Ads · {META_AD_SLOTS.PRE_ROLL}
+              Meta Ads · {adUnitIds.meta.PRE_ROLL}
             </span>
           )}
           {adSource === "local" && (
@@ -204,7 +207,7 @@ export function PreRollAd({ onComplete, ads }: PreRollAdProps) {
                   </p>
                   <p className="text-white/50 text-sm">Premium ad placement</p>
                   <p className="text-white/30 text-xs mt-2 font-mono">
-                    Slot: {GOOGLE_AD_SLOTS.PRE_ROLL}
+                    Slot: {adUnitIds.google.PRE_ROLL}
                   </p>
                 </div>
                 <p className="text-white/30 text-xs text-center max-w-xs">
@@ -226,7 +229,7 @@ export function PreRollAd({ onComplete, ads }: PreRollAdProps) {
                     Audience Network placement
                   </p>
                   <p className="text-white/30 text-xs mt-2 font-mono">
-                    Slot: {META_AD_SLOTS.PRE_ROLL}
+                    Slot: {adUnitIds.meta.PRE_ROLL}
                   </p>
                 </div>
                 <p className="text-white/30 text-xs text-center max-w-xs">

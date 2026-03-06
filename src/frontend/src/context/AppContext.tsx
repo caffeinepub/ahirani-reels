@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { GOOGLE_AD_SLOTS, META_AD_SLOTS } from "../components/ads/ads-config";
 import { useActor } from "../hooks/useActor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -18,6 +19,20 @@ export interface AdRpmConfig {
   reel: number; // default 2.00
   long: number; // default 4.00
   premium: number; // default 8.00
+}
+
+export interface AdUnitIds {
+  google: {
+    BANNER: string;
+    INTERSTITIAL: string;
+    REWARDED: string;
+    PRE_ROLL: string;
+  };
+  meta: {
+    BANNER: string;
+    INTERSTITIAL: string;
+    PRE_ROLL: string;
+  };
 }
 
 export type VideoType = "reel" | "long" | "premium";
@@ -289,6 +304,7 @@ export interface AppState {
   gifts: Gift[];
   adRevenueRecords: AdRevenueRecord[];
   adminTotalEarnings: number; // accumulates 40% admin share from all ad records
+  adUnitIds: AdUnitIds;
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -367,7 +383,8 @@ type Action =
       videoId: string;
       viewerId: string;
       revenueAmount: number;
-    };
+    }
+  | { type: "SET_AD_UNIT_IDS"; ids: AdUnitIds };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -1102,6 +1119,10 @@ function getInitialState(): AppState {
         adRevenueRecords: parsed.adRevenueRecords ?? MOCK_AD_REVENUE_RECORDS,
         adminTotalEarnings:
           parsed.adminTotalEarnings ?? SEED_ADMIN_TOTAL_EARNINGS,
+        adUnitIds: parsed.adUnitIds ?? {
+          google: { ...GOOGLE_AD_SLOTS },
+          meta: { ...META_AD_SLOTS },
+        },
       };
     }
   } catch {
@@ -1127,6 +1148,10 @@ function getInitialState(): AppState {
     gifts: [],
     adRevenueRecords: MOCK_AD_REVENUE_RECORDS,
     adminTotalEarnings: SEED_ADMIN_TOTAL_EARNINGS,
+    adUnitIds: {
+      google: { ...GOOGLE_AD_SLOTS },
+      meta: { ...META_AD_SLOTS },
+    },
   };
 }
 
@@ -2920,6 +2945,9 @@ function reducer(state: AppState, action: Action): AppState {
         transactions: [adRevTx, ...state.transactions],
       };
     }
+
+    case "SET_AD_UNIT_IDS":
+      return { ...state, adUnitIds: action.ids };
 
     default:
       return state;

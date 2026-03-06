@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Mail, Shield } from "lucide-react";
 
 const CONTACT_EMAIL = "support@faktahirani.app";
@@ -394,6 +394,30 @@ export default function PrivacyPolicyPage() {
             <Mail className="w-4 h-4" />
             {CONTACT_EMAIL}
           </a>
+        </div>
+
+        {/* Related links */}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-white/30">
+          <Link
+            to="/terms"
+            className="hover:text-white/50 transition-colors underline underline-offset-2"
+          >
+            Terms &amp; Conditions
+          </Link>
+          <span>·</span>
+          <Link
+            to="/age-policy"
+            className="hover:text-white/50 transition-colors underline underline-offset-2"
+          >
+            Age Policy / वय धोरण
+          </Link>
+          <span>·</span>
+          <Link
+            to="/contact"
+            className="hover:text-white/50 transition-colors underline underline-offset-2"
+          >
+            Contact
+          </Link>
         </div>
 
         {/* Bottom spacing */}

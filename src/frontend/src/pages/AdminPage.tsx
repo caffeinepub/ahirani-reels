@@ -44,6 +44,7 @@ import CreatorBadge from "../components/CreatorBadge";
 import { LOCAL_AD_RATE_PER_DAY } from "../components/ads/ads-config";
 import type {
   AdRpmConfig,
+  AdUnitIds,
   LocalAd,
   SubscriptionStatus,
   UserRole,
@@ -56,6 +57,36 @@ import { formatCount, formatTime, generateId } from "../utils/trending";
 const ADMIN_EMAIL = "admin@ahiranireels.com";
 const ADMIN_PASSWORD = "ssm";
 const ADMIN_NAME = "Samadhan Mali";
+
+// ─── Reason Badge ─────────────────────────────────────────────────────────────
+
+function ReasonBadge({ reason }: { reason: string }) {
+  const config: Record<string, { className: string }> = {
+    "Copyright violation": {
+      className: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+    },
+    Abuse: {
+      className: "bg-red-500/20 text-red-400 border-red-500/30",
+    },
+    Spam: {
+      className: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    },
+    "Inappropriate content": {
+      className: "bg-pink-500/20 text-pink-400 border-pink-500/30",
+    },
+  };
+  const { className } = config[reason] ?? {
+    className: "bg-white/10 text-white/50 border-white/20",
+  };
+  return (
+    <Badge
+      variant="secondary"
+      className={`text-[10px] px-1.5 py-0 ${className}`}
+    >
+      {reason}
+    </Badge>
+  );
+}
 
 // ─── Role Badge ───────────────────────────────────────────────────────────────
 
@@ -303,6 +334,17 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
   // RPM config local state (pre-filled from global state)
   const [rpmDraft, setRpmDraft] = useState<AdRpmConfig>({ ...state.rpmConfig });
+
+  // Ad Unit IDs draft state (pre-filled from global state)
+  const [adIdsDraft, setAdIdsDraft] = useState(() => ({
+    googleBanner: state.adUnitIds.google.BANNER,
+    googleInterstitial: state.adUnitIds.google.INTERSTITIAL,
+    googleRewarded: state.adUnitIds.google.REWARDED,
+    googlePreRoll: state.adUnitIds.google.PRE_ROLL,
+    metaBanner: state.adUnitIds.meta.BANNER,
+    metaInterstitial: state.adUnitIds.meta.INTERSTITIAL,
+    metaPreRoll: state.adUnitIds.meta.PRE_ROLL,
+  }));
 
   const activeVideos = state.videos.filter((v) => !v.isDeleted);
 
@@ -1136,6 +1178,91 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                     </p>
                   )}
                 </div>
+              </div>
+            </motion.div>
+
+            {/* Platform Policy card */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              data-ocid="admin.platform_policy_card"
+              className="rounded-2xl border border-amber-500/20 p-5 space-y-4"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.65 0.18 60 / 0.08), oklch(0.55 0.22 30 / 0.05))",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-amber-400" />
+                <h3 className="text-white font-semibold">Platform Policy</h3>
+                <span
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-bold text-white"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.65 0.22 50), oklch(0.55 0.28 20))",
+                  }}
+                >
+                  <Shield className="w-3 h-3" />
+                  Min Age: 13+
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  {
+                    label: "No Nudity",
+                    mr: "नग्नता नाही",
+                    color: "text-rose-400",
+                    bg: "bg-rose-500/8 border-rose-500/20",
+                  },
+                  {
+                    label: "No Violence",
+                    mr: "हिंसा नाही",
+                    color: "text-orange-400",
+                    bg: "bg-orange-500/8 border-orange-500/20",
+                  },
+                  {
+                    label: "No Hate Speech",
+                    mr: "द्वेष नाही",
+                    color: "text-amber-400",
+                    bg: "bg-amber-500/8 border-amber-500/20",
+                  },
+                  {
+                    label: "No Illegal Content",
+                    mr: "बेकायदेशीर नाही",
+                    color: "text-red-400",
+                    bg: "bg-red-500/8 border-red-500/20",
+                  },
+                ].map((rule) => (
+                  <div
+                    key={rule.label}
+                    className={`rounded-xl px-3 py-2.5 border ${rule.bg} flex items-center gap-2`}
+                  >
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${rule.color.replace("text-", "bg-")}`}
+                    />
+                    <div>
+                      <p className={`text-xs font-semibold ${rule.color}`}>
+                        {rule.label}
+                      </p>
+                      <p className="text-white/35 text-[10px]">{rule.mr}</p>
+                    </div>
+                    <span className="ml-auto text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-1.5 py-0.5">
+                      Enforced
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl p-3 bg-white/5 border border-white/10">
+                <p className="text-white/60 text-xs">
+                  <strong className="text-white">
+                    Admin can remove any content
+                  </strong>{" "}
+                  violating these rules. Blocked users cannot upload or comment.
+                </p>
+                <p className="text-white/35 text-[11px] mt-1">
+                  Admin या नियमांचे उल्लंघन करणारी कोणतीही सामग्री काढू शकतो.
+                </p>
               </div>
             </motion.div>
 
@@ -2016,6 +2143,253 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               Advertisement Management
             </h2>
 
+            {/* AdMob Ad Settings Card */}
+            <motion.div
+              data-ocid="admin.ad_settings.panel"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-white/10 bg-card p-5 space-y-5"
+            >
+              <div className="flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h3 className="text-white font-semibold">
+                    AdMob Ad Settings
+                  </h3>
+                  <p className="text-white/40 text-xs">
+                    जाहिरात Unit IDs अपडेट करा
+                  </p>
+                </div>
+              </div>
+
+              {/* Google AdMob Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🔍</span>
+                  <span className="text-white font-medium text-sm">
+                    Google AdMob
+                  </span>
+                  <span className="ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                    Android SDK
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="ad-google-banner"
+                      className="text-xs font-medium text-white/60"
+                    >
+                      Banner Ad{" "}
+                      <span className="text-white/30">/ बॅनर जाहिरात</span>
+                    </label>
+                    <input
+                      id="ad-google-banner"
+                      data-ocid="admin.ad_settings.google_banner_input"
+                      type="text"
+                      value={adIdsDraft.googleBanner}
+                      onChange={(e) =>
+                        setAdIdsDraft((prev) => ({
+                          ...prev,
+                          googleBanner: e.target.value,
+                        }))
+                      }
+                      placeholder="ca-app-pub-XXXXXXXXXXXXXXXX/xxxxxxxxxx"
+                      className="w-full h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/20 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="ad-google-interstitial"
+                      className="text-xs font-medium text-white/60"
+                    >
+                      Interstitial Ad{" "}
+                      <span className="text-white/30">/ इंटरस्टिशियल</span>
+                    </label>
+                    <input
+                      id="ad-google-interstitial"
+                      data-ocid="admin.ad_settings.google_interstitial_input"
+                      type="text"
+                      value={adIdsDraft.googleInterstitial}
+                      onChange={(e) =>
+                        setAdIdsDraft((prev) => ({
+                          ...prev,
+                          googleInterstitial: e.target.value,
+                        }))
+                      }
+                      placeholder="ca-app-pub-XXXXXXXXXXXXXXXX/xxxxxxxxxx"
+                      className="w-full h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/20 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="ad-google-rewarded"
+                      className="text-xs font-medium text-white/60"
+                    >
+                      Rewarded Ad{" "}
+                      <span className="text-white/30">/ Rewarded जाहिरात</span>
+                    </label>
+                    <input
+                      id="ad-google-rewarded"
+                      data-ocid="admin.ad_settings.google_rewarded_input"
+                      type="text"
+                      value={adIdsDraft.googleRewarded}
+                      onChange={(e) =>
+                        setAdIdsDraft((prev) => ({
+                          ...prev,
+                          googleRewarded: e.target.value,
+                        }))
+                      }
+                      placeholder="ca-app-pub-XXXXXXXXXXXXXXXX/xxxxxxxxxx"
+                      className="w-full h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/20 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="ad-google-preroll"
+                      className="text-xs font-medium text-white/60"
+                    >
+                      Pre-roll Video{" "}
+                      <span className="text-white/30">/ Pre-roll व्हिडिओ</span>
+                    </label>
+                    <input
+                      id="ad-google-preroll"
+                      data-ocid="admin.ad_settings.google_preroll_input"
+                      type="text"
+                      value={adIdsDraft.googlePreRoll}
+                      onChange={(e) =>
+                        setAdIdsDraft((prev) => ({
+                          ...prev,
+                          googlePreRoll: e.target.value,
+                        }))
+                      }
+                      placeholder="ca-app-pub-XXXXXXXXXXXXXXXX/xxxxxxxxxx"
+                      className="w-full h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/20 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-white/10" />
+
+              {/* Meta Audience Network Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📘</span>
+                  <span className="text-white font-medium text-sm">
+                    Meta Audience Network
+                  </span>
+                  <span className="ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                    Android SDK
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="ad-meta-banner"
+                      className="text-xs font-medium text-white/60"
+                    >
+                      Banner Placement ID
+                    </label>
+                    <input
+                      id="ad-meta-banner"
+                      data-ocid="admin.ad_settings.meta_banner_input"
+                      type="text"
+                      value={adIdsDraft.metaBanner}
+                      onChange={(e) =>
+                        setAdIdsDraft((prev) => ({
+                          ...prev,
+                          metaBanner: e.target.value,
+                        }))
+                      }
+                      placeholder="YOUR_META_APP_ID_BANNER"
+                      className="w-full h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/20 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="ad-meta-interstitial"
+                      className="text-xs font-medium text-white/60"
+                    >
+                      Interstitial Placement ID
+                    </label>
+                    <input
+                      id="ad-meta-interstitial"
+                      data-ocid="admin.ad_settings.meta_interstitial_input"
+                      type="text"
+                      value={adIdsDraft.metaInterstitial}
+                      onChange={(e) =>
+                        setAdIdsDraft((prev) => ({
+                          ...prev,
+                          metaInterstitial: e.target.value,
+                        }))
+                      }
+                      placeholder="YOUR_META_APP_ID_INTERSTITIAL"
+                      className="w-full h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/20 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label
+                      htmlFor="ad-meta-preroll"
+                      className="text-xs font-medium text-white/60"
+                    >
+                      Pre-roll Placement ID
+                    </label>
+                    <input
+                      id="ad-meta-preroll"
+                      data-ocid="admin.ad_settings.meta_preroll_input"
+                      type="text"
+                      value={adIdsDraft.metaPreRoll}
+                      onChange={(e) =>
+                        setAdIdsDraft((prev) => ({
+                          ...prev,
+                          metaPreRoll: e.target.value,
+                        }))
+                      }
+                      placeholder="YOUR_META_APP_ID_PRE_ROLL"
+                      className="w-full h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/20 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <Button
+                data-ocid="admin.ad_settings.save_button"
+                onClick={() => {
+                  const newIds: AdUnitIds = {
+                    google: {
+                      BANNER: adIdsDraft.googleBanner.trim(),
+                      INTERSTITIAL: adIdsDraft.googleInterstitial.trim(),
+                      REWARDED: adIdsDraft.googleRewarded.trim(),
+                      PRE_ROLL: adIdsDraft.googlePreRoll.trim(),
+                    },
+                    meta: {
+                      BANNER: adIdsDraft.metaBanner.trim(),
+                      INTERSTITIAL: adIdsDraft.metaInterstitial.trim(),
+                      PRE_ROLL: adIdsDraft.metaPreRoll.trim(),
+                    },
+                  };
+                  dispatch({ type: "SET_AD_UNIT_IDS", ids: newIds });
+                  toast.success("Ad Unit IDs saved! / जाहिरात IDs सेव्ह झाले!");
+                }}
+                className="w-full font-semibold"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.5 0.2 250), oklch(0.45 0.22 270))",
+                }}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Save Ad IDs / जाहिरात IDs सेव्ह करा
+              </Button>
+
+              {/* Note */}
+              <p className="text-white/30 text-[11px] text-center leading-relaxed">
+                हे IDs Android app मध्ये AdMob SDK साठी वापरले जातात. Web preview
+                मध्ये simulate होतात.
+              </p>
+            </motion.div>
+
             {/* Revenue summary card */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -2738,12 +3112,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                             </p>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant="secondary"
-                              className="text-[10px] bg-red-500/20 text-red-400 border-red-500/30"
-                            >
-                              {report.reason}
-                            </Badge>
+                            <ReasonBadge reason={report.reason} />
                           </TableCell>
                           <TableCell className="text-white/40 text-xs whitespace-nowrap">
                             {formatTime(report.createdAt)} ago

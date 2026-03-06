@@ -42,6 +42,7 @@ import { ArtistSearchSheet } from "../components/ArtistSearchSheet";
 import CreatorBadge from "../components/CreatorBadge";
 import { GiftButton } from "../components/GiftPanel";
 import PromoteSheet from "../components/PromoteSheet";
+import { ReportSheet } from "../components/ReportSheet";
 import { ShareSheet } from "../components/ShareSheet";
 import { BannerAd } from "../components/ads/BannerAd";
 import { InterstitialAd } from "../components/ads/InterstitialAd";
@@ -215,6 +216,7 @@ function ReelCard({
   const [shareOpen, setShareOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const isFollowing = useIsFollowing(video.uploaderId);
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const ocidIndex = index + 1;
@@ -266,23 +268,6 @@ function ReelCard({
         });
       }
     }
-  };
-
-  const handleReport = () => {
-    if (!state.currentUser) return;
-    dispatch({
-      type: "FLAG_VIDEO",
-      report: {
-        id: `report_${Date.now()}`,
-        videoId: video.id,
-        reporterId: state.currentUser.id,
-        reason: "Inappropriate content",
-        createdAt: Date.now(),
-      },
-    });
-    toast.success("Video reported", {
-      description: "Our team will review this content",
-    });
   };
 
   const handleFollow = () => {
@@ -401,7 +386,7 @@ function ReelCard({
             className="bg-[oklch(0.12_0_0)] border-white/10 text-white"
           >
             <DropdownMenuItem
-              onClick={handleReport}
+              onClick={() => setReportSheetOpen(true)}
               className="flex items-center gap-2 text-red-400 focus:text-red-300 focus:bg-red-400/10 cursor-pointer"
             >
               <Flag className="w-3.5 h-3.5" />
@@ -625,6 +610,13 @@ function ReelCard({
           onClose={() => setPromoteOpen(false)}
         />
       )}
+
+      {/* Report sheet */}
+      <ReportSheet
+        open={reportSheetOpen}
+        onOpenChange={setReportSheetOpen}
+        videoId={video.id}
+      />
     </div>
   );
 }
@@ -647,6 +639,7 @@ function VideoCard({
   const [likePulse, setLikePulse] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const ocidIndex = index + 1;
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const isActivePromotion =
@@ -686,21 +679,6 @@ function VideoCard({
         });
       }
     }
-  };
-
-  const handleReport = () => {
-    if (!state.currentUser) return;
-    dispatch({
-      type: "FLAG_VIDEO",
-      report: {
-        id: `report_${Date.now()}`,
-        videoId: video.id,
-        reporterId: state.currentUser.id,
-        reason: "Inappropriate content",
-        createdAt: Date.now(),
-      },
-    });
-    toast.success("Video reported");
   };
 
   const durationLabel = isPremiumTab ? "Exclusive" : "10 min";
@@ -815,7 +793,7 @@ function VideoCard({
                   className="bg-[oklch(0.12_0_0)] border-white/10 text-white"
                 >
                   <DropdownMenuItem
-                    onClick={handleReport}
+                    onClick={() => setReportSheetOpen(true)}
                     className="flex items-center gap-2 text-red-400 focus:text-red-300 focus:bg-red-400/10 cursor-pointer"
                   >
                     <Flag className="w-3.5 h-3.5" />
@@ -1008,6 +986,13 @@ function VideoCard({
           onClose={() => setPromoteOpen(false)}
         />
       )}
+
+      {/* Report sheet */}
+      <ReportSheet
+        open={reportSheetOpen}
+        onOpenChange={setReportSheetOpen}
+        videoId={video.id}
+      />
     </motion.div>
   );
 }

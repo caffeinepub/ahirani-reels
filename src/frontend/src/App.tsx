@@ -10,8 +10,11 @@ import {
 import BottomNav from "./components/BottomNav";
 import { AppProvider, useApp } from "./context/AppContext";
 import { LanguageProvider } from "./context/LanguageContext";
+import AboutPage from "./pages/AboutPage";
 import AdminPage from "./pages/AdminPage";
+import AgePolicyPage from "./pages/AgePolicyPage";
 import AuthPage from "./pages/AuthPage";
+import ContactPage from "./pages/ContactPage";
 import FeedPage from "./pages/FeedPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
 import LivePage from "./pages/LivePage";
@@ -29,11 +32,14 @@ function RootComponent() {
   const routerState = useRouterState();
   const pathname = routerState.location.pathname;
 
-  // Admin + Privacy + Terms routes - no auth guard
+  // Admin + Privacy + Terms + Contact + Age Policy + About routes - no auth guard
   if (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/privacy") ||
-    pathname.startsWith("/terms")
+    pathname.startsWith("/terms") ||
+    pathname.startsWith("/contact") ||
+    pathname.startsWith("/age-policy") ||
+    pathname.startsWith("/about")
   ) {
     return (
       <div className="phone-frame overflow-y-auto">
@@ -127,6 +133,24 @@ const termsRoute = createRoute({
   component: TermsPage,
 });
 
+const contactRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/contact",
+  component: ContactPage,
+});
+
+const agePolicyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/age-policy",
+  component: AgePolicyPage,
+});
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/about",
+  component: AboutPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   uploadRoute,
@@ -138,6 +162,9 @@ const routeTree = rootRoute.addChildren([
   liveRoute,
   privacyRoute,
   termsRoute,
+  contactRoute,
+  agePolicyRoute,
+  aboutRoute,
 ]);
 
 const router = createRouter({ routeTree });
