@@ -21,12 +21,15 @@ export const _CaffeineStorageRefillResult = IDL.Record({
 });
 export const UserId = IDL.Nat;
 export const ExternalBlob = IDL.Vec(IDL.Nat8);
-export const VideoId = IDL.Nat;
-export const ContentData = IDL.Record({
+export const LocalAd = IDL.Record({
   'id' : IDL.Text,
-  'blob' : ExternalBlob,
-  'name' : IDL.Text,
-  'description' : IDL.Text,
+  'durationDays' : IDL.Nat,
+  'linkUrl' : IDL.Text,
+  'tagline' : IDL.Text,
+  'businessName' : IDL.Text,
+  'isActive' : IDL.Bool,
+  'imageUrl' : IDL.Text,
+  'startDate' : IDL.Nat,
 });
 
 export const idlService = IDL.Service({
@@ -58,9 +61,24 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   'addContent' : IDL.Func([UserId, IDL.Text, IDL.Text, ExternalBlob], [], []),
   'addEducation' : IDL.Func([UserId, IDL.Text], [], []),
+  'addLocalAd' : IDL.Func(
+      [
+        UserId,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Nat,
+        IDL.Nat,
+        IDL.Bool,
+      ],
+      [],
+      [],
+    ),
   'adminAddAvatar' : IDL.Func([UserId, IDL.Text], [], []),
   'adminAddUser' : IDL.Func([UserId, IDL.Text], [], []),
-  'getContent' : IDL.Func([UserId, VideoId], [IDL.Opt(ContentData)], ['query']),
+  'getActiveLocalAds' : IDL.Func([], [IDL.Vec(LocalAd)], ['query']),
+  'getAllLocalAds' : IDL.Func([], [IDL.Vec(LocalAd)], ['query']),
   'getUser' : IDL.Func([UserId], [IDL.Vec(UserId)], ['query']),
   'sendOtp' : IDL.Func([UserId], [], []),
 });
@@ -81,12 +99,15 @@ export const idlFactory = ({ IDL }) => {
   });
   const UserId = IDL.Nat;
   const ExternalBlob = IDL.Vec(IDL.Nat8);
-  const VideoId = IDL.Nat;
-  const ContentData = IDL.Record({
+  const LocalAd = IDL.Record({
     'id' : IDL.Text,
-    'blob' : ExternalBlob,
-    'name' : IDL.Text,
-    'description' : IDL.Text,
+    'durationDays' : IDL.Nat,
+    'linkUrl' : IDL.Text,
+    'tagline' : IDL.Text,
+    'businessName' : IDL.Text,
+    'isActive' : IDL.Bool,
+    'imageUrl' : IDL.Text,
+    'startDate' : IDL.Nat,
   });
   
   return IDL.Service({
@@ -118,13 +139,24 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     'addContent' : IDL.Func([UserId, IDL.Text, IDL.Text, ExternalBlob], [], []),
     'addEducation' : IDL.Func([UserId, IDL.Text], [], []),
+    'addLocalAd' : IDL.Func(
+        [
+          UserId,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Nat,
+          IDL.Nat,
+          IDL.Bool,
+        ],
+        [],
+        [],
+      ),
     'adminAddAvatar' : IDL.Func([UserId, IDL.Text], [], []),
     'adminAddUser' : IDL.Func([UserId, IDL.Text], [], []),
-    'getContent' : IDL.Func(
-        [UserId, VideoId],
-        [IDL.Opt(ContentData)],
-        ['query'],
-      ),
+    'getActiveLocalAds' : IDL.Func([], [IDL.Vec(LocalAd)], ['query']),
+    'getAllLocalAds' : IDL.Func([], [IDL.Vec(LocalAd)], ['query']),
     'getUser' : IDL.Func([UserId], [IDL.Vec(UserId)], ['query']),
     'sendOtp' : IDL.Func([UserId], [], []),
   });

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AlertTriangle,
   Crown,
   Film,
   Hash,
@@ -27,39 +28,75 @@ const VIDEO_TYPES: Array<{
   type: VideoType;
   label: string;
   description: string;
+  hint: string;
   rpm: number;
   ocid: string;
 }> = [
   {
     type: "reel",
     label: "Reel",
-    description: "Up to 60s · RPM $2",
+    description: "Max 60s · RPM $2",
+    hint: "Max 60s · RPM $2",
     rpm: 2,
     ocid: "upload.type_reel_button",
   },
   {
     type: "long",
     label: "Long",
-    description: "1–10 min · RPM $4",
+    description: "Up to 10 min · RPM $4",
+    hint: "Up to 10 min · RPM $4",
     rpm: 4,
     ocid: "upload.type_long_button",
   },
   {
     type: "premium",
     label: "Premium",
-    description: "Exclusive · RPM $8",
+    description: "Exclusive · Subscribers only · RPM $8",
+    hint: "Exclusive · Subscribers only · RPM $8",
     rpm: 8,
     ocid: "upload.type_premium_button",
   },
 ];
+
+function formatExpiryDate(ts: number): string {
+  if (!ts || ts <= 0) return "";
+  const d = new Date(ts);
+  const day = String(d.getDate()).padStart(2, "0");
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
 
 export default function UploadPage() {
   const { state, dispatch } = useApp();
   const { actor } = useActor();
   const user = state.currentUser;
   const canUpload =
-    user?.role === "artist" && user?.subscriptionStatus === "active";
+    user?.role === "artist" &&
+    user?.subscriptionStatus === "active" &&
+    (user?.subscriptionExpiry ?? 0) > Date.now();
+  const [subscribing, setSubscribing] = useState(false);
+  const [uploadReminderDismissed, setUploadReminderDismissed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Subscription expiry reminder for active upload form
+  const subExpiry = user?.subscriptionExpiry ?? 0;
+  const daysLeft =
+    subExpiry > 0 ? Math.ceil((subExpiry - Date.now()) / 86400000) : 0;
+  const showUploadReminder =
+    canUpload && daysLeft > 0 && daysLeft <= 30 && !uploadReminderDismissed;
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [caption, setCaption] = useState("");
@@ -160,6 +197,8 @@ export default function UploadPage() {
         isDeleted: false,
         videoType: selectedType,
         viewsCount: 0,
+        adImpressions: 0,
+        shareCount: 0,
       },
     });
 
@@ -173,10 +212,24 @@ export default function UploadPage() {
     toast.success("🎉 Your reel is live!");
   };
 
+  const handleSubscribe = async () => {
+    if (!user) return;
+    setSubscribing(true);
+    await new Promise((r) => setTimeout(r, 1000));
+    dispatch({ type: "SUBSCRIBE_ARTIST", userId: user.id });
+    setSubscribing(false);
+    toast.success("Subscription activated! You can now upload videos.");
+  };
+
   const handleClear = () => {
     setVideoFile(null);
     setVideoUrl("");
   };
+
+  // Derived subscription state
+  const isArtist = user?.role === "artist";
+  const subStatus = user?.subscriptionStatus; // "active" | "expired" | "none"
+  const isExpired = isArtist && subStatus === "expired";
 
   // Locked state for non-artists or artists without active subscription
   if (!canUpload) {
@@ -200,42 +253,112 @@ export default function UploadPage() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-sm"
           >
-            <div
-              className="rounded-2xl border border-white/10 p-8 flex flex-col items-center text-center gap-4"
-              style={{ background: "rgba(255,255,255,0.04)" }}
-            >
-              {user?.role !== "artist" ? (
-                <>
-                  <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
-                    <Lock className="w-8 h-8 text-white/50" />
-                  </div>
-                  <div>
-                    <h2 className="text-white font-bold text-lg mb-2">
-                      Artist Account Required
-                    </h2>
-                    <p className="text-white/50 text-sm leading-relaxed">
-                      Only artist accounts can upload videos. Contact admin to
-                      upgrade your account.
+            {/* Non-artist locked card */}
+            {!isArtist ? (
+              <div
+                className="rounded-2xl border border-white/10 p-8 flex flex-col items-center text-center gap-4"
+                style={{ background: "rgba(255,255,255,0.04)" }}
+              >
+                <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
+                  <Lock className="w-8 h-8 text-white/50" />
+                </div>
+                <div>
+                  <h2 className="text-white font-bold text-lg mb-2">
+                    Artist Account Required
+                  </h2>
+                  <p className="text-white/50 text-sm leading-relaxed">
+                    Only artist accounts can upload videos. Contact admin to
+                    upgrade your account.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* Artist with expired or no subscription — renewal card */
+              <div
+                className="rounded-2xl border border-amber-500/20 p-8 flex flex-col items-center text-center gap-5"
+                style={{
+                  background:
+                    "linear-gradient(160deg, oklch(0.14 0.04 60 / 0.7) 0%, oklch(0.11 0.02 40 / 0.85) 100%)",
+                  boxShadow:
+                    "0 0 40px oklch(0.55 0.18 75 / 0.08), inset 0 1px 0 oklch(0.55 0.18 75 / 0.12)",
+                }}
+              >
+                {/* Crown icon */}
+                <div
+                  className="w-18 h-18 rounded-2xl flex items-center justify-center"
+                  style={{
+                    width: "4.5rem",
+                    height: "4.5rem",
+                    background:
+                      "linear-gradient(135deg, oklch(0.25 0.1 75 / 0.6), oklch(0.2 0.08 55 / 0.5))",
+                    border: "1px solid oklch(0.55 0.18 75 / 0.3)",
+                    boxShadow: "0 4px 16px oklch(0.55 0.18 75 / 0.15)",
+                  }}
+                >
+                  <Crown className="w-8 h-8 text-amber-400" />
+                </div>
+
+                {/* Title & status */}
+                <div className="space-y-2">
+                  <h2 className="text-white font-bold text-xl leading-tight">
+                    {isExpired
+                      ? "Your Upload Access is Paused"
+                      : "Start Uploading Today"}
+                  </h2>
+
+                  {/* Expired date line */}
+                  {isExpired && (user?.subscriptionExpiry ?? 0) > 0 && (
+                    <p className="text-red-400 text-xs font-semibold tracking-wide">
+                      Expired on{" "}
+                      {formatExpiryDate(user?.subscriptionExpiry ?? 0)}
                     </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center">
-                    <Crown className="w-8 h-8 text-amber-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-white font-bold text-lg mb-2">
-                      Subscription Required
-                    </h2>
-                    <p className="text-white/50 text-sm leading-relaxed">
-                      Your subscription has expired or is inactive. Contact
-                      admin to renew.
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
+                  )}
+
+                  <p className="text-white/60 text-sm leading-relaxed max-w-xs mx-auto">
+                    Please renew your ₹600 yearly artist subscription to upload
+                    videos.
+                  </p>
+                </div>
+
+                {/* Divider */}
+                <div className="w-full h-px bg-amber-500/15" />
+
+                {/* Renewal button */}
+                <Button
+                  data-ocid="upload.renew_subscription_button"
+                  onClick={handleSubscribe}
+                  disabled={subscribing}
+                  className="w-full h-12 font-bold text-base text-white border-0 transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
+                  style={{
+                    background: subscribing
+                      ? "linear-gradient(135deg, oklch(0.35 0.06 75), oklch(0.3 0.05 55))"
+                      : "linear-gradient(135deg, oklch(0.72 0.18 75), oklch(0.65 0.22 55))",
+                    boxShadow: subscribing
+                      ? "none"
+                      : "0 4px 20px oklch(0.65 0.22 55 / 0.35)",
+                  }}
+                >
+                  {subscribing ? (
+                    <span className="flex items-center gap-2.5">
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                      Activating subscription...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2.5">
+                      <Crown className="w-4 h-4 shrink-0" />
+                      Renew Artist Subscription ₹600 / Year
+                    </span>
+                  )}
+                </Button>
+
+                {/* Fine print */}
+                {!subscribing && (
+                  <p className="text-white/30 text-xs">
+                    Valid for 365 days · Instant activation
+                  </p>
+                )}
+              </div>
+            )}
           </motion.div>
         </div>
       </div>
@@ -255,6 +378,36 @@ export default function UploadPage() {
       </div>
 
       <div className="px-4 py-5 space-y-5 pb-24">
+        {/* Subscription expiry reminder banner */}
+        {showUploadReminder && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            data-ocid="upload.subscription.reminder_banner"
+            className="rounded-xl border border-amber-500/40 px-3 py-2 flex items-center gap-2"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.2 0.08 80 / 0.5), oklch(0.16 0.05 60 / 0.4))",
+            }}
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <p className="text-amber-300 text-xs leading-relaxed flex-1">
+              Subscription expires in{" "}
+              <span className="font-bold">
+                {daysLeft} day{daysLeft === 1 ? "" : "s"}
+              </span>
+              . Renew on your Profile to keep uploading.
+            </p>
+            <button
+              type="button"
+              onClick={() => setUploadReminderDismissed(true)}
+              className="text-amber-400/60 hover:text-amber-400 transition-colors shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+
         {/* Video upload zone */}
         {!videoUrl ? (
           <motion.div
@@ -346,6 +499,7 @@ export default function UploadPage() {
           <div className="grid grid-cols-3 gap-2">
             {VIDEO_TYPES.map((vt) => {
               const isActive = selectedType === vt.type;
+              const isPremiumType = vt.type === "premium";
               return (
                 <button
                   key={vt.type}
@@ -360,22 +514,51 @@ export default function UploadPage() {
                   style={
                     isActive
                       ? {
-                          background:
-                            "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+                          background: isPremiumType
+                            ? "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))"
+                            : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
                         }
                       : {}
                   }
                 >
+                  {isPremiumType && (
+                    <Crown
+                      className={`w-3 h-3 mb-0.5 ${isActive ? "text-amber-200" : "text-amber-500/60"}`}
+                    />
+                  )}
                   <span className="font-semibold text-sm">{vt.label}</span>
                   <span
-                    className={`text-[10px] leading-tight ${isActive ? "text-white/80" : "text-white/40"}`}
+                    className={`text-[10px] leading-tight text-center ${isActive ? "text-white/80" : "text-white/40"}`}
                   >
-                    {vt.description}
+                    {vt.hint}
                   </span>
                 </button>
               );
             })}
           </div>
+
+          {/* Premium subscription warning */}
+          {selectedType === "premium" &&
+            user?.subscriptionStatus !== "active" && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                data-ocid="upload.error_state"
+                className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 px-3 py-2.5 mt-2"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.18 0.06 60 / 0.4), oklch(0.12 0.04 40 / 0.5))",
+                }}
+              >
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-amber-300 text-xs leading-relaxed">
+                  Active subscription required to upload Premium content.
+                  Contact admin to activate your subscription.
+                </p>
+              </motion.div>
+            )}
         </motion.div>
 
         {/* Caption */}
@@ -453,11 +636,19 @@ export default function UploadPage() {
         <Button
           data-ocid="upload.submit_button"
           onClick={handlePost}
-          disabled={uploading || !caption.trim()}
+          disabled={
+            uploading ||
+            !caption.trim() ||
+            (selectedType === "premium" &&
+              user?.subscriptionStatus !== "active")
+          }
           className="w-full h-12 font-bold text-base relative overflow-hidden"
           style={{
             background:
-              "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+              selectedType === "premium" &&
+              user?.subscriptionStatus !== "active"
+                ? "oklch(0.3 0.04 60)"
+                : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
           }}
         >
           {/* Progress bar overlay */}

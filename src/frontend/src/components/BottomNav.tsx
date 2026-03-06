@@ -1,16 +1,24 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, PlusSquare, User, Wallet } from "lucide-react";
+import { Home, PlusSquare, Search, Trophy, User, Wallet } from "lucide-react";
 import { motion } from "motion/react";
 import { useApp, useBackendConnected } from "../context/AppContext";
+import { NotificationBell } from "./NotificationBell";
 
 const ALL_NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home", ocid: "nav.home_link" },
+  { to: "/search", icon: Search, label: "Search", ocid: "nav.search_link" },
   {
     to: "/upload",
     icon: PlusSquare,
     label: "Upload",
     ocid: "nav.upload_link",
     artistOnly: true,
+  },
+  {
+    to: "/leaderboard",
+    icon: Trophy,
+    label: "Ranks",
+    ocid: "nav.leaderboard_link",
   },
   { to: "/wallet", icon: Wallet, label: "Wallet", ocid: "nav.wallet_link" },
   { to: "/profile", icon: User, label: "Profile", ocid: "nav.profile_link" },
@@ -35,23 +43,29 @@ export default function BottomNav() {
       className="absolute bottom-0 left-0 right-0 z-30 border-t border-white/10"
       style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(20px)" }}
     >
-      {/* ICP backend connectivity badge */}
-      {isConnected && (
-        <motion.div
-          data-ocid="nav.icp_connected.toggle"
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="absolute -top-5 right-3 flex items-center gap-1 bg-black/70 border border-white/10 rounded-full px-2 py-0.5 pointer-events-none"
-        >
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-          </span>
-          <span className="text-[9px] text-emerald-400 font-medium tracking-wide uppercase">
-            ICP
-          </span>
-        </motion.div>
-      )}
+      {/* Notification bell + ICP badge row */}
+      <div className="absolute -top-10 right-3 flex items-center gap-2">
+        {/* ICP backend connectivity badge */}
+        {isConnected && (
+          <motion.div
+            data-ocid="nav.icp_connected.toggle"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-1 bg-black/70 border border-white/10 rounded-full px-2 py-0.5 pointer-events-none"
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+            </span>
+            <span className="text-[9px] text-emerald-400 font-medium tracking-wide uppercase">
+              ICP
+            </span>
+          </motion.div>
+        )}
+
+        {/* Notification bell */}
+        {currentUser && <NotificationBell />}
+      </div>
 
       <div className="flex">
         {NAV_ITEMS.map(({ to, icon: Icon, label, ocid }) => {

@@ -10,22 +10,31 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AlertTriangle,
   Camera,
+  CheckCircle2,
   Clapperboard,
+  Clock,
+  Copy,
+  Crown,
   Edit2,
   Eye,
+  Gift,
   Grid2X2,
   Heart,
   Settings,
+  Share2,
   Shield,
-  Users,
+  Sparkles,
   X,
+  XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import CreatorBadge from "../components/CreatorBadge";
 import { useApp } from "../context/AppContext";
-import type { SubscriptionStatus, UserRole } from "../context/AppContext";
+import type { SubscriptionStatus, User, UserRole } from "../context/AppContext";
 import { formatCount } from "../utils/trending";
 
 // ─── Role Badge ───────────────────────────────────────────────────────────────
@@ -83,6 +92,302 @@ function SubscriptionBadge({ status }: { status: SubscriptionStatus }) {
     >
       {label}
     </span>
+  );
+}
+
+// ─── Subscription helpers ─────────────────────────────────────────────────────
+
+function formatExpiryDate(ts: number): string {
+  if (!ts || ts <= 0) return "";
+  const d = new Date(ts);
+  const day = String(d.getDate()).padStart(2, "0");
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function getDaysRemaining(ts: number): number {
+  if (!ts || ts <= 0) return 0;
+  return Math.ceil((ts - Date.now()) / 86400000);
+}
+
+// ─── Subscription Card ────────────────────────────────────────────────────────
+
+function SubscriptionCard({ user }: { user: User }) {
+  const { dispatch } = useApp();
+  const [loading, setLoading] = useState(false);
+
+  const { subscriptionStatus: status, subscriptionExpiry: expiry } = user;
+  const daysRemaining = getDaysRemaining(expiry);
+  const isExpired =
+    status === "expired" || (status === "active" && daysRemaining <= 0);
+  const isActive = status === "active" && daysRemaining > 0;
+  const isNone = status === "none";
+  const isNearingExpiry = isActive && daysRemaining <= 30;
+
+  const showRenew = isExpired || isNearingExpiry;
+  const showSubscribe = isNone;
+
+  const handleSubscribe = async () => {
+    setLoading(true);
+    await new Promise((r) => setTimeout(r, 1000));
+    dispatch({ type: "SUBSCRIBE_ARTIST", userId: user.id });
+    setLoading(false);
+    toast.success("Subscribed! Valid for 1 year.", {
+      description: "You can now upload videos.",
+    });
+  };
+
+  // Card color scheme based on status
+  const cardStyle =
+    isActive && !isNearingExpiry
+      ? {
+          background:
+            "linear-gradient(135deg, oklch(0.18 0.06 150 / 0.8), oklch(0.14 0.04 150 / 0.6))",
+          border: "1px solid oklch(0.55 0.15 150 / 0.4)",
+        }
+      : isNearingExpiry
+        ? {
+            background:
+              "linear-gradient(135deg, oklch(0.2 0.08 80 / 0.8), oklch(0.16 0.06 60 / 0.6))",
+            border: "1px solid oklch(0.7 0.18 80 / 0.4)",
+          }
+        : isExpired
+          ? {
+              background:
+                "linear-gradient(135deg, oklch(0.18 0.06 25 / 0.8), oklch(0.14 0.04 15 / 0.6))",
+              border: "1px solid oklch(0.55 0.18 25 / 0.4)",
+            }
+          : {
+              background:
+                "linear-gradient(135deg, oklch(0.16 0.04 60 / 0.6), oklch(0.12 0.03 60 / 0.4))",
+              border: "1px solid oklch(0.5 0.08 60 / 0.3)",
+            };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      data-ocid="profile.subscription.card"
+      className="rounded-2xl p-4 space-y-3"
+      style={cardStyle}
+    >
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Crown
+            className={`w-4 h-4 ${
+              isActive && !isNearingExpiry
+                ? "text-emerald-400"
+                : isNearingExpiry
+                  ? "text-amber-400"
+                  : isExpired
+                    ? "text-red-400"
+                    : "text-white/40"
+            }`}
+          />
+          <span className="text-white font-semibold text-sm">
+            Artist Subscription
+          </span>
+        </div>
+        {/* Status pill */}
+        {isActive && !isNearingExpiry && (
+          <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <CheckCircle2 className="w-3 h-3" /> Active
+          </span>
+        )}
+        {isNearingExpiry && (
+          <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <Clock className="w-3 h-3" /> Expiring Soon
+          </span>
+        )}
+        {isExpired && (
+          <span className="inline-flex items-center gap-1 bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <XCircle className="w-3 h-3" /> Expired
+          </span>
+        )}
+        {isNone && (
+          <span className="inline-flex items-center gap-1 bg-white/10 text-white/40 border border-white/10 text-[10px] font-bold px-2 py-0.5 rounded-full">
+            No Subscription
+          </span>
+        )}
+      </div>
+
+      {/* Expiry info */}
+      {expiry > 0 && (
+        <div className="space-y-1">
+          <p className="text-white/50 text-xs">
+            {isExpired ? "Expired on" : "Valid until"}{" "}
+            <span className="text-white/80 font-semibold">
+              {formatExpiryDate(expiry)}
+            </span>
+          </p>
+          {isActive && daysRemaining > 0 && (
+            <p
+              className={`text-xs font-medium ${
+                isNearingExpiry ? "text-amber-400" : "text-emerald-400"
+              }`}
+            >
+              {daysRemaining} day{daysRemaining === 1 ? "" : "s"} remaining
+            </p>
+          )}
+          {isExpired && daysRemaining <= 0 && expiry > 0 && (
+            <p className="text-xs font-medium text-red-400">
+              Expired {Math.abs(daysRemaining)} day
+              {Math.abs(daysRemaining) === 1 ? "" : "s"} ago
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Plan info */}
+      <div className="rounded-xl bg-white/5 px-3 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-white/60 text-xs">Annual Plan</span>
+        </div>
+        <span className="text-white font-bold text-sm">₹600 / year</span>
+      </div>
+
+      {/* CTA button */}
+      {(showRenew || showSubscribe) && (
+        <Button
+          data-ocid={
+            showSubscribe
+              ? "profile.subscription.subscribe_button"
+              : "profile.subscription.renew_button"
+          }
+          onClick={handleSubscribe}
+          disabled={loading}
+          className="w-full h-10 font-semibold text-sm"
+          style={{
+            background: loading
+              ? "oklch(0.3 0.04 60)"
+              : "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))",
+          }}
+        >
+          {loading ? (
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Processing...
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              <Crown className="w-4 h-4" />
+              {showSubscribe ? "Subscribe ₹600 / year" : "Renew ₹600 / year"}
+            </span>
+          )}
+        </Button>
+      )}
+    </motion.div>
+  );
+}
+
+// ─── Referral Code Card ───────────────────────────────────────────────────────
+
+function ReferralCodeCard({ user }: { user: User }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(user.referralCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Referral code copied!");
+    } catch {
+      toast.error("Couldn't copy, try manually");
+    }
+  };
+
+  const handleShare = async () => {
+    const text = `Join Ahirani Reels with my referral code ${user.referralCode}! 🎬`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Ahirani Reels", text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        toast.success("Share text copied!");
+      }
+    } catch {
+      toast.error("Couldn't share");
+    }
+  };
+
+  const isArtist = user.role === "artist";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      data-ocid="profile.referral.card"
+      className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-4 space-y-3"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Gift className="w-4 h-4 text-reels-pink" />
+        <h3 className="text-white font-semibold text-sm">Your Referral Code</h3>
+      </div>
+
+      {/* Code display */}
+      <div className="rounded-xl bg-white/8 px-4 py-3 text-center border border-white/10">
+        <p className="font-display text-2xl font-bold text-white tracking-widest">
+          {user.referralCode}
+        </p>
+        <p className="text-white/40 text-[11px] mt-1.5">
+          {isArtist
+            ? "Earn ₹60 when a referred artist subscribes"
+            : "Earn ₹10 when a friend joins"}
+        </p>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <Button
+          data-ocid="profile.referral.copy_button"
+          onClick={handleCopy}
+          variant="secondary"
+          size="sm"
+          className="flex-1 h-9 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
+        >
+          {copied ? (
+            <>
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-green-400" />
+              Copied!
+            </>
+          ) : (
+            <>
+              <Copy className="w-3.5 h-3.5 mr-1.5" />
+              Copy
+            </>
+          )}
+        </Button>
+        <Button
+          data-ocid="profile.referral.share_button"
+          onClick={handleShare}
+          size="sm"
+          className="flex-1 h-9 text-xs font-semibold"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+          }}
+        >
+          <Share2 className="w-3.5 h-3.5 mr-1.5" />
+          Share
+        </Button>
+      </div>
+    </motion.div>
   );
 }
 
@@ -261,6 +566,7 @@ export default function ProfilePage() {
   const { state, dispatch } = useApp();
   const user = state.currentUser;
   const [editOpen, setEditOpen] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   if (!user) return null;
 
@@ -274,6 +580,14 @@ export default function ProfilePage() {
     dispatch({ type: "LOGOUT" });
     toast.success("Logged out");
   };
+
+  // Subscription reminder banner logic
+  const isArtist = currentUserData.role === "artist";
+  const subStatus = currentUserData.subscriptionStatus ?? "none";
+  const subExpiry = currentUserData.subscriptionExpiry ?? 0;
+  const daysLeft = getDaysRemaining(subExpiry);
+  const showReminderBanner =
+    isArtist && subStatus === "active" && daysLeft > 0 && daysLeft <= 30;
 
   return (
     <div className="h-full overflow-y-auto bg-background">
@@ -292,6 +606,37 @@ export default function ProfilePage() {
       <div className="pb-24">
         {/* Profile hero */}
         <div className="px-4 pt-6 pb-4 space-y-4">
+          {/* Subscription expiry reminder banner */}
+          {showReminderBanner && !bannerDismissed && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              data-ocid="profile.subscription.reminder_banner"
+              className="rounded-xl border border-amber-500/40 px-3 py-2.5 flex items-start gap-2"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.2 0.08 80 / 0.5), oklch(0.16 0.05 60 / 0.4))",
+              }}
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-amber-300 text-xs leading-relaxed flex-1">
+                Your subscription expires in{" "}
+                <span className="font-bold">
+                  {daysLeft} day{daysLeft === 1 ? "" : "s"}
+                </span>
+                . Renew to keep uploading.
+              </p>
+              <button
+                type="button"
+                onClick={() => setBannerDismissed(true)}
+                className="text-amber-400/60 hover:text-amber-400 transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+
           <div className="flex items-start gap-4">
             <div className="relative">
               <Avatar className="w-20 h-20 border-2 border-reels-pink">
@@ -316,6 +661,13 @@ export default function ProfilePage() {
                     status={currentUserData.subscriptionStatus ?? "none"}
                   />
                 </span>
+                <CreatorBadge
+                  user={currentUserData}
+                  userVideos={myVideos}
+                  allUsers={state.users}
+                  allVideos={state.videos}
+                  size="md"
+                />
               </div>
               {currentUserData.bio ? (
                 <p className="text-white/60 text-sm mt-1.5 leading-relaxed">
@@ -354,6 +706,12 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
+
+          {/* Subscription card — artists only */}
+          {isArtist && <SubscriptionCard user={currentUserData} />}
+
+          {/* Referral code card — all users */}
+          <ReferralCodeCard user={currentUserData} />
 
           {/* Action buttons */}
           <div className="flex gap-3">

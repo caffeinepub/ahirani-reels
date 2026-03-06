@@ -14,20 +14,25 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
-export type UserId = bigint;
-export type VideoId = bigint;
-export interface ContentData {
+export interface LocalAd {
     id: string;
-    blob: ExternalBlob;
-    name: string;
-    description: string;
+    durationDays: bigint;
+    linkUrl: string;
+    tagline: string;
+    businessName: string;
+    isActive: boolean;
+    imageUrl: string;
+    startDate: bigint;
 }
+export type UserId = bigint;
 export interface backendInterface {
     addContent(_userId: UserId, name: string, description: string, blob: ExternalBlob): Promise<void>;
     addEducation(_userId: UserId, _education: string): Promise<void>;
+    addLocalAd(_userId: UserId, businessName: string, imageUrl: string, linkUrl: string, tagline: string, durationDays: bigint, startDate: bigint, isActive: boolean): Promise<void>;
     adminAddAvatar(_userId: UserId, _avatar: string): Promise<void>;
     adminAddUser(userId: UserId, username: string): Promise<void>;
-    getContent(_userId: UserId, id: VideoId): Promise<ContentData | null>;
+    getActiveLocalAds(): Promise<Array<LocalAd>>;
+    getAllLocalAds(): Promise<Array<LocalAd>>;
     getUser(_userId: UserId): Promise<Array<UserId>>;
     sendOtp(_userId: UserId): Promise<void>;
 }

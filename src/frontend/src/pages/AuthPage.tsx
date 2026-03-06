@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
   Clapperboard,
@@ -13,6 +14,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import type { Transaction } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
 import type { UserRole, User as UserType } from "../context/AppContext";
 import { generateId, generateReferralCode } from "../utils/trending";
@@ -21,6 +23,7 @@ type Step = "phone" | "otp" | "username" | "role";
 
 export default function AuthPage() {
   const { state, dispatch } = useApp();
+  const navigate = useNavigate();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -31,6 +34,33 @@ export default function AuthPage() {
   const [countdown, setCountdown] = useState(0);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Secret long-press on logo: hold 5 seconds to open hidden admin panel
+  const [logoPressProgress, setLogoPressProgress] = useState(0);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+
+  const handleLogoPointerDown = () => {
+    let elapsed = 0;
+    longPressIntervalRef.current = setInterval(() => {
+      elapsed += 100;
+      setLogoPressProgress(Math.min((elapsed / 5000) * 100, 100));
+    }, 100);
+    longPressTimerRef.current = setTimeout(() => {
+      clearInterval(longPressIntervalRef.current!);
+      setLogoPressProgress(0);
+      navigate({ to: "/admin" });
+    }, 5000);
+  };
+
+  const handleLogoPointerUp = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    if (longPressIntervalRef.current)
+      clearInterval(longPressIntervalRef.current);
+    setLogoPressProgress(0);
+  };
 
   const startCountdown = () => {
     setCountdown(30);
@@ -118,6 +148,10 @@ export default function AuthPage() {
       role: selectedRole,
       subscriptionStatus: "none",
       subscriptionExpiry: 0,
+      loginStreak: 0,
+      lastLoginDate: 0,
+      lastSpinDate: 0,
+      isVerifiedCreator: false,
     };
 
     dispatch({ type: "ADD_USER", user: newUser });
@@ -125,23 +159,55 @@ export default function AuthPage() {
     // Process referral
     if (referralCode.trim()) {
       const referrer = state.users.find(
-        (u) => u.referralCode.toUpperCase() === referralCode.toUpperCase(),
+        (u) =>
+          u.referralCode.toUpperCase() === referralCode.toUpperCase() &&
+          u.id !== newUser.id, // prevent self-referral
       );
       if (referrer) {
-        dispatch({ type: "ADD_COINS", userId: referrer.id, amount: 10 });
+        if (selectedRole === "artist") {
+          // Artist referral: ₹10 paid immediately on signup (existing flow)
+          dispatch({ type: "ADD_EARNINGS", userId: referrer.id, amount: 10 });
+          const referralTx: Transaction = {
+            id: `tx${Date.now()}ref`,
+            userId: referrer.id,
+            txType: "referral_credit",
+            amount: 10,
+            description: `Referral reward for @${newUser.username}`,
+            createdAt: Date.now(),
+          };
+          dispatch({ type: "ADD_TRANSACTION", transaction: referralTx });
+        }
+        // Always track the referral record
         dispatch({
           type: "ADD_REFERRAL",
           referral: {
             referrerId: referrer.id,
             referredUserId: newUser.id,
             referredUsername: newUser.username,
-            coinsEarned: 10,
+            commissionEarned: selectedRole === "artist" ? 10 : 0,
             createdAt: Date.now(),
+            subscriptionReferralEarned: false,
           },
         });
-        toast.success(
-          `Referral applied! @${referrer.username} earned 10 coins.`,
-        );
+
+        if (selectedRole === "viewer") {
+          // Viewer referral: set up progress tracking -- reward paid only after 3 videos
+          dispatch({
+            type: "INIT_VIEWER_REFERRAL",
+            referredUserId: newUser.id,
+            referrerId: referrer.id,
+          });
+          // OTP was verified to get here
+          dispatch({
+            type: "VIEWER_OTP_VERIFIED",
+            referredUserId: newUser.id,
+          });
+          toast.success(
+            `Referral code applied! @${referrer.username} earns ₹10 after you watch 3 videos.`,
+          );
+        } else {
+          toast.success(`Referral applied! @${referrer.username} earned ₹10.`);
+        }
       }
     }
 
@@ -174,20 +240,57 @@ export default function AuthPage() {
           "radial-gradient(ellipse at top, oklch(0.12 0.05 15) 0%, oklch(0 0 0) 60%)",
       }}
     >
-      {/* Logo */}
+      {/* Logo (long-press 5s = hidden admin entry) */}
       <motion.div
         initial={{ opacity: 0, y: -30 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col items-center mb-10"
       >
         <div
-          className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4"
+          data-ocid="auth.logo_longpress"
+          onPointerDown={handleLogoPointerDown}
+          onPointerUp={handleLogoPointerUp}
+          onPointerLeave={handleLogoPointerUp}
+          onContextMenu={(e) => e.preventDefault()}
+          className="relative w-20 h-20 rounded-2xl flex items-center justify-center mb-4 select-none cursor-pointer"
           style={{
             background:
               "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+            WebkitUserSelect: "none",
           }}
         >
           <span className="text-3xl">🎬</span>
+          {/* Progress ring overlay while long-pressing */}
+          {logoPressProgress > 0 && (
+            <svg
+              className="absolute inset-0 w-full h-full rounded-2xl pointer-events-none"
+              viewBox="0 0 80 80"
+              aria-label="Loading admin panel"
+              role="img"
+            >
+              <circle
+                cx="40"
+                cy="40"
+                r="37"
+                fill="none"
+                stroke="rgba(255,255,255,0.15)"
+                strokeWidth="3"
+              />
+              <circle
+                cx="40"
+                cy="40"
+                r="37"
+                fill="none"
+                stroke="white"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 37}`}
+                strokeDashoffset={`${2 * Math.PI * 37 * (1 - logoPressProgress / 100)}`}
+                transform="rotate(-90 40 40)"
+                style={{ transition: "stroke-dashoffset 0.1s linear" }}
+              />
+            </svg>
+          )}
         </div>
         <h1 className="font-display text-3xl font-bold text-white tracking-tight">
           Ahirani Reels
@@ -372,16 +475,23 @@ export default function AuthPage() {
                 />
               </div>
 
-              <div className="relative">
-                <Gift className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                <Input
-                  placeholder="Referral code (optional)"
-                  value={referralCode}
-                  onChange={(e) =>
-                    setReferralCode(e.target.value.toUpperCase())
-                  }
-                  className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/30 h-12 text-base uppercase tracking-widest"
-                />
+              <div className="space-y-1.5">
+                <div className="relative">
+                  <Gift className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                  <Input
+                    data-ocid="auth.referral_code_input"
+                    placeholder="Referral code (optional)"
+                    value={referralCode}
+                    onChange={(e) =>
+                      setReferralCode(e.target.value.toUpperCase())
+                    }
+                    className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/30 h-12 text-base uppercase tracking-widest"
+                  />
+                </div>
+                <p className="text-white/30 text-[11px] px-1">
+                  Viewers: referrer earns ₹10 after you watch 3 videos. Artists:
+                  ₹10 now + ₹60 on subscription.
+                </p>
               </div>
 
               <Button

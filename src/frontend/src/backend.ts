@@ -89,17 +89,17 @@ export class ExternalBlob {
         return this;
     }
 }
-export type UserId = bigint;
-export interface _CaffeineStorageRefillInformation {
-    proposed_top_up_amount?: bigint;
-}
-export type VideoId = bigint;
-export interface ContentData {
+export interface LocalAd {
     id: string;
-    blob: ExternalBlob;
-    name: string;
-    description: string;
+    durationDays: bigint;
+    linkUrl: string;
+    tagline: string;
+    businessName: string;
+    isActive: boolean;
+    imageUrl: string;
+    startDate: bigint;
 }
+export type UserId = bigint;
 export interface _CaffeineStorageCreateCertificateResult {
     method: string;
     blob_hash: string;
@@ -107,6 +107,9 @@ export interface _CaffeineStorageCreateCertificateResult {
 export interface _CaffeineStorageRefillResult {
     success?: boolean;
     topped_up_amount?: bigint;
+}
+export interface _CaffeineStorageRefillInformation {
+    proposed_top_up_amount?: bigint;
 }
 export interface backendInterface {
     _caffeineStorageBlobIsLive(hash: Uint8Array): Promise<boolean>;
@@ -117,13 +120,15 @@ export interface backendInterface {
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     addContent(_userId: UserId, name: string, description: string, blob: ExternalBlob): Promise<void>;
     addEducation(_userId: UserId, _education: string): Promise<void>;
+    addLocalAd(_userId: UserId, businessName: string, imageUrl: string, linkUrl: string, tagline: string, durationDays: bigint, startDate: bigint, isActive: boolean): Promise<void>;
     adminAddAvatar(_userId: UserId, _avatar: string): Promise<void>;
     adminAddUser(userId: UserId, username: string): Promise<void>;
-    getContent(_userId: UserId, id: VideoId): Promise<ContentData | null>;
+    getActiveLocalAds(): Promise<Array<LocalAd>>;
+    getAllLocalAds(): Promise<Array<LocalAd>>;
     getUser(_userId: UserId): Promise<Array<UserId>>;
     sendOtp(_userId: UserId): Promise<void>;
 }
-import type { ContentData as _ContentData, ExternalBlob as _ExternalBlob, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
+import type { ExternalBlob as _ExternalBlob, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _caffeineStorageBlobIsLive(arg0: Uint8Array): Promise<boolean> {
@@ -238,6 +243,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async addLocalAd(arg0: UserId, arg1: string, arg2: string, arg3: string, arg4: string, arg5: bigint, arg6: bigint, arg7: boolean): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.addLocalAd(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.addLocalAd(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+            return result;
+        }
+    }
     async adminAddAvatar(arg0: UserId, arg1: string): Promise<void> {
         if (this.processError) {
             try {
@@ -266,18 +285,32 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getContent(arg0: UserId, arg1: VideoId): Promise<ContentData | null> {
+    async getActiveLocalAds(): Promise<Array<LocalAd>> {
         if (this.processError) {
             try {
-                const result = await this.actor.getContent(arg0, arg1);
-                return from_candid_opt_n9(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.getActiveLocalAds();
+                return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getContent(arg0, arg1);
-            return from_candid_opt_n9(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.getActiveLocalAds();
+            return result;
+        }
+    }
+    async getAllLocalAds(): Promise<Array<LocalAd>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAllLocalAds();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAllLocalAds();
+            return result;
         }
     }
     async getUser(arg0: UserId): Promise<Array<UserId>> {
@@ -309,12 +342,6 @@ export class Backend implements backendInterface {
         }
     }
 }
-async function from_candid_ContentData_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _ContentData): Promise<ContentData> {
-    return await from_candid_record_n11(_uploadFile, _downloadFile, value);
-}
-async function from_candid_ExternalBlob_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _ExternalBlob): Promise<ExternalBlob> {
-    return await _downloadFile(value);
-}
 function from_candid__CaffeineStorageRefillResult_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: __CaffeineStorageRefillResult): _CaffeineStorageRefillResult {
     return from_candid_record_n5(_uploadFile, _downloadFile, value);
 }
@@ -323,27 +350,6 @@ function from_candid_opt_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Ar
 }
 function from_candid_opt_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [bigint]): bigint | null {
     return value.length === 0 ? null : value[0];
-}
-async function from_candid_opt_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_ContentData]): Promise<ContentData | null> {
-    return value.length === 0 ? null : await from_candid_ContentData_n10(_uploadFile, _downloadFile, value[0]);
-}
-async function from_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    id: string;
-    blob: _ExternalBlob;
-    name: string;
-    description: string;
-}): Promise<{
-    id: string;
-    blob: ExternalBlob;
-    name: string;
-    description: string;
-}> {
-    return {
-        id: value.id,
-        blob: await from_candid_ExternalBlob_n12(_uploadFile, _downloadFile, value.blob),
-        name: value.name,
-        description: value.description
-    };
 }
 function from_candid_record_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     success: [] | [boolean];

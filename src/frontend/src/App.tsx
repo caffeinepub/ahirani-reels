@@ -12,7 +12,9 @@ import { AppProvider, useApp } from "./context/AppContext";
 import AdminPage from "./pages/AdminPage";
 import AuthPage from "./pages/AuthPage";
 import FeedPage from "./pages/FeedPage";
+import LeaderboardPage from "./pages/LeaderboardPage";
 import ProfilePage from "./pages/ProfilePage";
+import SearchPage from "./pages/SearchPage";
 import UploadPage from "./pages/UploadPage";
 import WalletPage from "./pages/WalletPage";
 
@@ -81,6 +83,18 @@ const profileRoute = createRoute({
   component: ProfilePage,
 });
 
+const searchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/search",
+  component: SearchPage,
+});
+
+const leaderboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/leaderboard",
+  component: LeaderboardPage,
+});
+
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/admin",
@@ -92,6 +106,8 @@ const routeTree = rootRoute.addChildren([
   uploadRoute,
   walletRoute,
   profileRoute,
+  searchRoute,
+  leaderboardRoute,
   adminRoute,
 ]);
 
