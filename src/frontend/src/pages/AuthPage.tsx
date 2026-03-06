@@ -158,6 +158,15 @@ export default function AuthPage() {
       email: opts.emailVal,
       password: opts.passwordVal,
       authProvider: opts.authProviderVal,
+      dailyTasksDate: "",
+      taskWatchDone: false,
+      taskLikeDone: false,
+      taskFollowDone: false,
+      taskShareDone: false,
+      dailyWatchCount: 0,
+      dailyLikeCount: 0,
+      dailyFollowCount: 0,
+      dailyShareCount: 0,
     };
 
     dispatch({ type: "ADD_USER", user: newUser });

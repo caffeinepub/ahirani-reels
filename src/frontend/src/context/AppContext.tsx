@@ -64,6 +64,16 @@ export interface User {
   points: number; // cumulative points earned
   watchedVideosToday: number; // count of videos watched today (resets daily)
   lastWatchRewardDate: string; // date string for daily watch reset
+  // Daily task tracking
+  dailyTasksDate: string; // date string for daily reset, e.g. "Mon Jan 06 2026"
+  taskWatchDone: boolean; // watch 5 videos task done today
+  taskLikeDone: boolean; // like 3 videos task done today
+  taskFollowDone: boolean; // follow 1 artist task done today
+  taskShareDone: boolean; // share 1 video task done today
+  dailyLikeCount: number; // likes done today (toward 3)
+  dailyFollowCount: number; // follows done today (toward 1)
+  dailyShareCount: number; // shares done today (toward 1)
+  dailyWatchCount: number; // videos watched today (toward 5) — separate from watchedVideosToday
   // Multi-provider auth fields
   email?: string;
   password?: string; // plain text simulation (not for production)
@@ -126,7 +136,8 @@ export interface Transaction {
     | "subscription_payment"
     | "daily_bonus"
     | "spin_reward"
-    | "watch_reward";
+    | "watch_reward"
+    | "task_reward";
   amount: number;
   description: string;
   createdAt: number;
@@ -266,7 +277,8 @@ type Action =
   | { type: "SHARE_VIDEO_BOOST"; videoId: string; userId: string }
   | { type: "GRANT_VERIFIED_BADGE"; userId: string }
   | { type: "REVOKE_VERIFIED_BADGE"; userId: string }
-  | { type: "EARN_WATCH_POINTS"; userId: string };
+  | { type: "EARN_WATCH_POINTS"; userId: string }
+  | { type: "DELETE_COMMENT"; commentId: string };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -474,6 +486,15 @@ const MOCK_USERS: User[] = [
     points: 0,
     watchedVideosToday: 0,
     lastWatchRewardDate: "",
+    dailyTasksDate: "",
+    taskWatchDone: false,
+    taskLikeDone: false,
+    taskFollowDone: false,
+    taskShareDone: false,
+    dailyLikeCount: 0,
+    dailyFollowCount: 0,
+    dailyShareCount: 0,
+    dailyWatchCount: 0,
     authProvider: "phone" as const,
   },
   {
@@ -502,6 +523,15 @@ const MOCK_USERS: User[] = [
     points: 0,
     watchedVideosToday: 0,
     lastWatchRewardDate: "",
+    dailyTasksDate: "",
+    taskWatchDone: false,
+    taskLikeDone: false,
+    taskFollowDone: false,
+    taskShareDone: false,
+    dailyLikeCount: 0,
+    dailyFollowCount: 0,
+    dailyShareCount: 0,
+    dailyWatchCount: 0,
     authProvider: "phone" as const,
   },
   {
@@ -530,6 +560,15 @@ const MOCK_USERS: User[] = [
     points: 12,
     watchedVideosToday: 0,
     lastWatchRewardDate: "",
+    dailyTasksDate: "",
+    taskWatchDone: false,
+    taskLikeDone: false,
+    taskFollowDone: false,
+    taskShareDone: false,
+    dailyLikeCount: 0,
+    dailyFollowCount: 0,
+    dailyShareCount: 0,
+    dailyWatchCount: 0,
     authProvider: "phone" as const,
   },
   {
@@ -558,6 +597,15 @@ const MOCK_USERS: User[] = [
     points: 0,
     watchedVideosToday: 0,
     lastWatchRewardDate: "",
+    dailyTasksDate: "",
+    taskWatchDone: false,
+    taskLikeDone: false,
+    taskFollowDone: false,
+    taskShareDone: false,
+    dailyLikeCount: 0,
+    dailyFollowCount: 0,
+    dailyShareCount: 0,
+    dailyWatchCount: 0,
     authProvider: "phone" as const,
   },
 ];
@@ -870,6 +918,15 @@ function getInitialState(): AppState {
         points: u.points ?? 0,
         watchedVideosToday: u.watchedVideosToday ?? 0,
         lastWatchRewardDate: u.lastWatchRewardDate ?? "",
+        dailyTasksDate: u.dailyTasksDate ?? "",
+        taskWatchDone: u.taskWatchDone ?? false,
+        taskLikeDone: u.taskLikeDone ?? false,
+        taskFollowDone: u.taskFollowDone ?? false,
+        taskShareDone: u.taskShareDone ?? false,
+        dailyLikeCount: u.dailyLikeCount ?? 0,
+        dailyFollowCount: u.dailyFollowCount ?? 0,
+        dailyShareCount: u.dailyShareCount ?? 0,
+        dailyWatchCount: u.dailyWatchCount ?? 0,
       }));
       return {
         ...parsed,
@@ -949,6 +1006,66 @@ function reducer(state: AppState, action: Action): AppState {
         likeNotifications = [likeNotif, ...state.notifications];
       }
 
+      // Daily task tracking for likes (only on actual like, not unlike)
+      const todayStr = new Date().toDateString();
+      let likeTaskTransactions = state.transactions;
+      const updatedUsersForLike = state.users.map((u) => {
+        if (u.id !== action.userId || isLiked) return u;
+        // Reset daily task fields if new day
+        const isNewDay = (u.dailyTasksDate ?? "") !== todayStr;
+        const baseUser = isNewDay
+          ? {
+              ...u,
+              dailyTasksDate: todayStr,
+              taskWatchDone: false,
+              taskLikeDone: false,
+              taskFollowDone: false,
+              taskShareDone: false,
+              dailyLikeCount: 0,
+              dailyFollowCount: 0,
+              dailyShareCount: 0,
+              dailyWatchCount: 0,
+            }
+          : u;
+        const newLikeCount = (baseUser.dailyLikeCount ?? 0) + 1;
+        const taskJustDone = newLikeCount >= 3 && !baseUser.taskLikeDone;
+        if (taskJustDone) {
+          const now = Date.now();
+          likeTaskTransactions = [
+            {
+              id: `tx${now}liketask`,
+              userId: u.id,
+              txType: "task_reward" as const,
+              amount: 1,
+              description: "Daily task: Liked 3 videos (+1 coin)",
+              createdAt: now,
+            },
+            ...likeTaskTransactions,
+          ];
+        }
+        return {
+          ...baseUser,
+          totalLikes: baseUser.totalLikes + 1,
+          dailyLikeCount: newLikeCount,
+          taskLikeDone: baseUser.taskLikeDone || taskJustDone,
+          coins: taskJustDone ? baseUser.coins + 1 : baseUser.coins,
+          pendingEarnings: taskJustDone
+            ? (baseUser.pendingEarnings ?? 0) + 1 / 10
+            : baseUser.pendingEarnings,
+        };
+      });
+
+      const updatedCurrentUserForLike =
+        state.currentUser?.id === action.userId && !isLiked
+          ? (updatedUsersForLike.find((u) => u.id === action.userId) ??
+            state.currentUser)
+          : state.currentUser?.id === action.userId && isLiked
+            ? {
+                ...state.currentUser,
+                totalLikes: state.currentUser.totalLikes - 1,
+              }
+            : state.currentUser;
+
       return {
         ...state,
         likedVideoIds: isLiked
@@ -962,24 +1079,16 @@ function reducer(state: AppState, action: Action): AppState {
               }
             : v,
         ),
-        users: state.users.map((u) =>
-          u.id === action.userId
-            ? {
-                ...u,
-                totalLikes: isLiked ? u.totalLikes - 1 : u.totalLikes + 1,
-              }
-            : u,
-        ),
-        currentUser:
-          state.currentUser?.id === action.userId
-            ? {
-                ...state.currentUser,
-                totalLikes: isLiked
-                  ? state.currentUser.totalLikes - 1
-                  : state.currentUser.totalLikes + 1,
-              }
-            : state.currentUser,
+        users: isLiked
+          ? state.users.map((u) =>
+              u.id === action.userId
+                ? { ...u, totalLikes: u.totalLikes - 1 }
+                : u,
+            )
+          : updatedUsersForLike,
+        currentUser: updatedCurrentUserForLike,
         notifications: likeNotifications,
+        transactions: likeTaskTransactions,
       };
     }
 
@@ -1154,10 +1263,44 @@ function reducer(state: AppState, action: Action): AppState {
         const todayStr = new Date().toDateString();
         updatedUsers = updatedUsers.map((u) => {
           if (u.id !== watchingUserId) return u;
-          // Reset if it's a new day
+          // Reset if it's a new day (for 10-video watch reward)
           const isNewDay = (u.lastWatchRewardDate ?? "") !== todayStr;
           const currentWatched = isNewDay ? 0 : (u.watchedVideosToday ?? 0);
           const newWatchedCount = currentWatched + 1;
+
+          // Reset daily task fields if it's a new day
+          const isDailyTaskNewDay = (u.dailyTasksDate ?? "") !== todayStr;
+          const baseUser = isDailyTaskNewDay
+            ? {
+                ...u,
+                dailyTasksDate: todayStr,
+                taskWatchDone: false,
+                taskLikeDone: false,
+                taskFollowDone: false,
+                taskShareDone: false,
+                dailyLikeCount: 0,
+                dailyFollowCount: 0,
+                dailyShareCount: 0,
+                dailyWatchCount: 0,
+              }
+            : u;
+
+          const newDailyWatchCount = (baseUser.dailyWatchCount ?? 0) + 1;
+          const watchTaskJustDone =
+            newDailyWatchCount >= 5 && !baseUser.taskWatchDone;
+
+          if (watchTaskJustDone) {
+            const earnNow = Date.now();
+            const watchTaskTx: Transaction = {
+              id: `tx${earnNow}watchtask`,
+              userId: u.id,
+              txType: "task_reward",
+              amount: 2,
+              description: "Daily task: Watched 5 videos (+2 coins)",
+              createdAt: earnNow,
+            };
+            newTransactions = [watchTaskTx, ...newTransactions];
+          }
 
           // If reached 10 videos, inline the watch reward logic
           if (newWatchedCount >= 10) {
@@ -1172,18 +1315,30 @@ function reducer(state: AppState, action: Action): AppState {
             };
             newTransactions = [watchTx, ...newTransactions];
             return {
-              ...u,
-              points: (u.points ?? 0) + 2,
-              pendingEarnings: (u.pendingEarnings ?? 0) + 2,
+              ...baseUser,
+              points: (baseUser.points ?? 0) + 2,
+              pendingEarnings:
+                (baseUser.pendingEarnings ?? 0) +
+                2 +
+                (watchTaskJustDone ? 2 / 10 : 0),
+              coins: watchTaskJustDone ? baseUser.coins + 2 : baseUser.coins,
               watchedVideosToday: 0,
               lastWatchRewardDate: todayStr,
+              dailyWatchCount: watchTaskJustDone ? 0 : newDailyWatchCount,
+              taskWatchDone: baseUser.taskWatchDone || watchTaskJustDone,
             };
           }
 
           return {
-            ...u,
+            ...baseUser,
             watchedVideosToday: newWatchedCount,
             lastWatchRewardDate: isNewDay ? todayStr : u.lastWatchRewardDate,
+            dailyWatchCount: watchTaskJustDone ? 0 : newDailyWatchCount,
+            taskWatchDone: baseUser.taskWatchDone || watchTaskJustDone,
+            coins: watchTaskJustDone ? baseUser.coins + 2 : baseUser.coins,
+            pendingEarnings: watchTaskJustDone
+              ? (baseUser.pendingEarnings ?? 0) + 2 / 10
+              : baseUser.pendingEarnings,
           };
         });
 
@@ -1841,20 +1996,71 @@ function reducer(state: AppState, action: Action): AppState {
         isRead: false,
       };
 
+      // Daily task tracking for follow
+      const todayStrFollow = new Date().toDateString();
+      let followTaskTransactions = state.transactions;
+      const updatedUsersForFollow = state.users.map((u) => {
+        if (u.id !== state.currentUser!.id) {
+          // Update target's follower count
+          if (u.id === action.targetUserId)
+            return { ...u, followers: u.followers + 1 };
+          return u;
+        }
+        // Reset daily task fields if new day
+        const isNewDay = (u.dailyTasksDate ?? "") !== todayStrFollow;
+        const baseUser = isNewDay
+          ? {
+              ...u,
+              dailyTasksDate: todayStrFollow,
+              taskWatchDone: false,
+              taskLikeDone: false,
+              taskFollowDone: false,
+              taskShareDone: false,
+              dailyLikeCount: 0,
+              dailyFollowCount: 0,
+              dailyShareCount: 0,
+              dailyWatchCount: 0,
+            }
+          : u;
+        const newFollowCount = (baseUser.dailyFollowCount ?? 0) + 1;
+        const taskJustDone = newFollowCount >= 1 && !baseUser.taskFollowDone;
+        if (taskJustDone) {
+          const now = Date.now();
+          followTaskTransactions = [
+            {
+              id: `tx${now}followtask`,
+              userId: u.id,
+              txType: "task_reward" as const,
+              amount: 1,
+              description: "Daily task: Followed 1 artist (+1 coin)",
+              createdAt: now,
+            },
+            ...followTaskTransactions,
+          ];
+        }
+        return {
+          ...baseUser,
+          following: baseUser.following + 1,
+          dailyFollowCount: newFollowCount,
+          taskFollowDone: baseUser.taskFollowDone || taskJustDone,
+          coins: taskJustDone ? baseUser.coins + 1 : baseUser.coins,
+          pendingEarnings: taskJustDone
+            ? (baseUser.pendingEarnings ?? 0) + 1 / 10
+            : baseUser.pendingEarnings,
+        };
+      });
+
+      const updatedCurrentUserForFollow =
+        updatedUsersForFollow.find((u) => u.id === state.currentUser!.id) ??
+        state.currentUser;
+
       return {
         ...state,
         followingIds: [...state.followingIds, action.targetUserId],
-        users: state.users.map((u) =>
-          u.id === action.targetUserId
-            ? { ...u, followers: u.followers + 1 }
-            : u.id === state.currentUser?.id
-              ? { ...u, following: u.following + 1 }
-              : u,
-        ),
-        currentUser: state.currentUser
-          ? { ...state.currentUser, following: state.currentUser.following + 1 }
-          : null,
+        users: updatedUsersForFollow,
+        currentUser: updatedCurrentUserForFollow,
         notifications: [followNotif, ...state.notifications],
+        transactions: followTaskTransactions,
       };
     }
 
@@ -2104,6 +2310,58 @@ function reducer(state: AppState, action: Action): AppState {
     // ── Share Video Boost ─────────────────────────────────────────────────────
 
     case "SHARE_VIDEO_BOOST": {
+      // Daily task tracking for share
+      const todayStrShare = new Date().toDateString();
+      let shareTaskTransactions = state.transactions;
+      const updatedUsersForShare = state.users.map((u) => {
+        if (u.id !== action.userId) return u;
+        const isNewDay = (u.dailyTasksDate ?? "") !== todayStrShare;
+        const baseUser = isNewDay
+          ? {
+              ...u,
+              dailyTasksDate: todayStrShare,
+              taskWatchDone: false,
+              taskLikeDone: false,
+              taskFollowDone: false,
+              taskShareDone: false,
+              dailyLikeCount: 0,
+              dailyFollowCount: 0,
+              dailyShareCount: 0,
+              dailyWatchCount: 0,
+            }
+          : u;
+        const newShareCount = (baseUser.dailyShareCount ?? 0) + 1;
+        const taskJustDone = newShareCount >= 1 && !baseUser.taskShareDone;
+        if (taskJustDone) {
+          const now = Date.now();
+          shareTaskTransactions = [
+            {
+              id: `tx${now}sharetask`,
+              userId: u.id,
+              txType: "task_reward" as const,
+              amount: 1,
+              description: "Daily task: Shared 1 video (+1 coin)",
+              createdAt: now,
+            },
+            ...shareTaskTransactions,
+          ];
+        }
+        return {
+          ...baseUser,
+          dailyShareCount: newShareCount,
+          taskShareDone: baseUser.taskShareDone || taskJustDone,
+          coins: taskJustDone ? baseUser.coins + 1 : baseUser.coins,
+          pendingEarnings: taskJustDone
+            ? (baseUser.pendingEarnings ?? 0) + 1 / 10
+            : baseUser.pendingEarnings,
+        };
+      });
+      const updatedCurrentUserForShare =
+        state.currentUser?.id === action.userId
+          ? (updatedUsersForShare.find((u) => u.id === action.userId) ??
+            state.currentUser)
+          : state.currentUser;
+
       return {
         ...state,
         videos: state.videos.map((v) =>
@@ -2111,6 +2369,9 @@ function reducer(state: AppState, action: Action): AppState {
             ? { ...v, shareCount: (v.shareCount ?? 0) + 1 }
             : v,
         ),
+        users: updatedUsersForShare,
+        currentUser: updatedCurrentUserForShare,
+        transactions: shareTaskTransactions,
       };
     }
 
@@ -2139,6 +2400,26 @@ function reducer(state: AppState, action: Action): AppState {
           state.currentUser?.id === action.userId
             ? { ...state.currentUser, isVerifiedCreator: false }
             : state.currentUser,
+      };
+    }
+
+    case "DELETE_COMMENT": {
+      const deletedComment = state.comments.find(
+        (c) => c.id === action.commentId,
+      );
+      return {
+        ...state,
+        comments: state.comments.filter((c) => c.id !== action.commentId),
+        videos: deletedComment
+          ? state.videos.map((v) =>
+              v.id === deletedComment.videoId
+                ? {
+                    ...v,
+                    commentsCount: Math.max(0, v.commentsCount - 1),
+                  }
+                : v,
+            )
+          : state.videos,
       };
     }
 

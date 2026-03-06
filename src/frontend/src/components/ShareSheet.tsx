@@ -6,7 +6,12 @@ import {
 } from "@/components/ui/sheet";
 import { Copy, Share2 } from "lucide-react";
 import { motion } from "motion/react";
-import { SiInstagram, SiTelegram, SiWhatsapp } from "react-icons/si";
+import {
+  SiFacebook,
+  SiInstagram,
+  SiTelegram,
+  SiWhatsapp,
+} from "react-icons/si";
 import { toast } from "sonner";
 
 interface ShareSheetProps {
@@ -47,6 +52,13 @@ export function ShareSheet({
     );
   };
 
+  const handleFacebook = () => {
+    window.open(
+      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+      "_blank",
+    );
+  };
+
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(url);
@@ -67,6 +79,15 @@ export function ShareSheet({
       textColor: "text-green-300",
     },
     {
+      icon: <SiFacebook className="w-6 h-6 text-blue-400" />,
+      label: "Facebook",
+      ocid: "share.facebook_button",
+      onClick: handleFacebook,
+      borderColor: "border-blue-500/20",
+      bg: "linear-gradient(135deg, oklch(0.16 0.05 240), oklch(0.12 0.04 235))",
+      textColor: "text-blue-300",
+    },
+    {
       icon: <SiInstagram className="w-6 h-6 text-pink-400" />,
       label: "Instagram",
       ocid: "share.instagram_button",
@@ -76,13 +97,13 @@ export function ShareSheet({
       textColor: "text-pink-300",
     },
     {
-      icon: <SiTelegram className="w-6 h-6 text-blue-400" />,
+      icon: <SiTelegram className="w-6 h-6 text-cyan-400" />,
       label: "Telegram",
       ocid: "share.telegram_button",
       onClick: handleTelegram,
-      borderColor: "border-blue-500/20",
-      bg: "linear-gradient(135deg, oklch(0.16 0.04 240), oklch(0.12 0.03 235))",
-      textColor: "text-blue-300",
+      borderColor: "border-cyan-500/20",
+      bg: "linear-gradient(135deg, oklch(0.16 0.04 210), oklch(0.12 0.03 205))",
+      textColor: "text-cyan-300",
     },
     {
       icon: <Copy className="w-6 h-6 text-white/60" />,
@@ -114,7 +135,7 @@ export function ShareSheet({
         </SheetHeader>
 
         <div className="p-5">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {SHARE_OPTIONS.map((opt, i) => (
               <motion.button
                 key={opt.ocid}

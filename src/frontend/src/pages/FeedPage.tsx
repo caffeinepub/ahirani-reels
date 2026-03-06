@@ -20,6 +20,7 @@ import {
   Eye,
   Film,
   Flag,
+  Flame,
   Heart,
   Lock,
   MessageCircle,
@@ -232,6 +233,12 @@ function ReelCard({
   const handleLike = () => {
     if (!state.currentUser) return;
     const isCurrentlyLiked = state.likedVideoIds.includes(video.id);
+    // Read pre-dispatch task state for toast check
+    const liveUser = state.users.find((u) => u.id === state.currentUser!.id);
+    const todayStr = new Date().toDateString();
+    const isToday = (liveUser?.dailyTasksDate ?? "") === todayStr;
+    const preLikeCount = isToday ? (liveUser?.dailyLikeCount ?? 0) : 0;
+    const taskAlreadyDone = isToday && (liveUser?.taskLikeDone ?? false);
     dispatch({
       type: "LIKE_VIDEO",
       videoId: video.id,
@@ -240,6 +247,12 @@ function ReelCard({
     if (!isCurrentlyLiked) {
       setLikePulse(true);
       setTimeout(() => setLikePulse(false), 300);
+      // Check if this like completes the task
+      if (!taskAlreadyDone && preLikeCount + 1 >= 3) {
+        toast.success("✅ Task complete! +1 coin", {
+          description: "Daily task: Liked 3 videos",
+        });
+      }
     }
   };
 
@@ -262,10 +275,24 @@ function ReelCard({
 
   const handleFollow = () => {
     if (!state.currentUser) return;
+    // Read pre-dispatch task state for toast check
+    const liveUserFollow = state.users.find(
+      (u) => u.id === state.currentUser!.id,
+    );
+    const todayStrFollow = new Date().toDateString();
+    const isTodayFollow =
+      (liveUserFollow?.dailyTasksDate ?? "") === todayStrFollow;
+    const taskFollowAlreadyDone =
+      isTodayFollow && (liveUserFollow?.taskFollowDone ?? false);
     dispatch({
       type: isFollowing ? "UNFOLLOW" : "FOLLOW",
       targetUserId: video.uploaderId,
     });
+    if (!isFollowing && !taskFollowAlreadyDone) {
+      toast.success("✅ Task complete! +1 coin", {
+        description: "Daily task: Followed an artist",
+      });
+    }
   };
 
   const currentLikes =
@@ -273,6 +300,8 @@ function ReelCard({
   const currentComments =
     state.videos.find((v) => v.id === video.id)?.commentsCount ??
     video.commentsCount;
+  const currentViews =
+    state.videos.find((v) => v.id === video.id)?.viewsCount ?? video.viewsCount;
   const isLiked = state.likedVideoIds.includes(video.id);
 
   const isPremiumLocked =
@@ -427,6 +456,14 @@ function ReelCard({
             Share
           </span>
         </button>
+
+        {/* Views */}
+        <div className="flex flex-col items-center gap-1">
+          <Eye className="w-6 h-6 text-white/70 drop-shadow-lg" />
+          <span className="text-white/70 text-xs font-semibold drop-shadow">
+            {formatCount(currentViews)}
+          </span>
+        </div>
       </div>
 
       {/* Bottom overlay */}
@@ -494,11 +531,25 @@ function ReelCard({
         onClose={() => setShareOpen(false)}
         onShare={() => {
           if (state.currentUser) {
+            // Check task state before dispatch
+            const liveUserShare = state.users.find(
+              (u) => u.id === state.currentUser!.id,
+            );
+            const todayStrShare = new Date().toDateString();
+            const isTodayShare =
+              (liveUserShare?.dailyTasksDate ?? "") === todayStrShare;
+            const taskShareAlreadyDone =
+              isTodayShare && (liveUserShare?.taskShareDone ?? false);
             dispatch({
               type: "SHARE_VIDEO_BOOST",
               videoId: video.id,
               userId: state.currentUser.id,
             });
+            if (!taskShareAlreadyDone) {
+              toast.success("✅ Task complete! +1 coin", {
+                description: "Daily task: Shared a video",
+              });
+            }
           }
         }}
       />
@@ -543,6 +594,13 @@ function VideoCard({
   const handleLike = () => {
     if (!state.currentUser || isLocked) return;
     const isCurrentlyLiked = state.likedVideoIds.includes(video.id);
+    // Read pre-dispatch task state for toast check
+    const liveUserVc = state.users.find((u) => u.id === state.currentUser!.id);
+    const todayStrVc = new Date().toDateString();
+    const isTodayVc = (liveUserVc?.dailyTasksDate ?? "") === todayStrVc;
+    const preLikeCountVc = isTodayVc ? (liveUserVc?.dailyLikeCount ?? 0) : 0;
+    const taskLikeAlreadyDoneVc =
+      isTodayVc && (liveUserVc?.taskLikeDone ?? false);
     dispatch({
       type: "LIKE_VIDEO",
       videoId: video.id,
@@ -551,6 +609,11 @@ function VideoCard({
     if (!isCurrentlyLiked) {
       setLikePulse(true);
       setTimeout(() => setLikePulse(false), 300);
+      if (!taskLikeAlreadyDoneVc && preLikeCountVc + 1 >= 3) {
+        toast.success("✅ Task complete! +1 coin", {
+          description: "Daily task: Liked 3 videos",
+        });
+      }
     }
   };
 
@@ -789,11 +852,24 @@ function VideoCard({
         onClose={() => setShareOpen(false)}
         onShare={() => {
           if (state.currentUser) {
+            const liveUserVcShare = state.users.find(
+              (u) => u.id === state.currentUser!.id,
+            );
+            const todayStrVcShare = new Date().toDateString();
+            const isTodayVcShare =
+              (liveUserVcShare?.dailyTasksDate ?? "") === todayStrVcShare;
+            const taskShareAlreadyDoneVc =
+              isTodayVcShare && (liveUserVcShare?.taskShareDone ?? false);
             dispatch({
               type: "SHARE_VIDEO_BOOST",
               videoId: video.id,
               userId: state.currentUser.id,
             });
+            if (!taskShareAlreadyDoneVc) {
+              toast.success("✅ Task complete! +1 coin", {
+                description: "Daily task: Shared a video",
+              });
+            }
           }
         }}
       />
@@ -851,7 +927,7 @@ function VideoListFeed({
 
 // ─── Feed Tab Types ───────────────────────────────────────────────────────────
 
-type FeedTab = "foryou" | "long" | "premium" | "following";
+type FeedTab = "foryou" | "trending" | "long" | "premium" | "following";
 
 // ─── Feed Page ────────────────────────────────────────────────────────────────
 
@@ -881,10 +957,44 @@ export default function FeedPage() {
   const followingFeed = state.videos
     .filter((v) => !v.isDeleted && state.followingIds.includes(v.uploaderId))
     .sort((a, b) => b.createdAt - a.createdAt);
+
+  // Trending feed: sorted purely by engagement (likes*1.5 + comments*2 + views*0.1 + shares*5)
+  const trendingFeed = state.videos
+    .filter((v) => !v.isDeleted)
+    .map((v) => ({
+      video: v,
+      score:
+        v.likesCount * 1.5 +
+        v.commentsCount * 2.0 +
+        v.viewsCount * 0.1 +
+        (v.shareCount ?? 0) * 5,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map((s) => s.video);
   const localAds: LocalAd[] = state.localAds ?? [];
 
   const handleSeen = useCallback(
     (id: string) => {
+      // Check pre-dispatch watch task state for toast
+      const checkWatchTask = () => {
+        if (!state.currentUser) return;
+        const liveUser = state.users.find(
+          (u) => u.id === state.currentUser!.id,
+        );
+        const todayStr = new Date().toDateString();
+        const isToday = (liveUser?.dailyTasksDate ?? "") === todayStr;
+        const preDailyWatchCount = isToday
+          ? (liveUser?.dailyWatchCount ?? 0)
+          : 0;
+        const taskWatchAlreadyDone =
+          isToday && (liveUser?.taskWatchDone ?? false);
+        if (!taskWatchAlreadyDone && preDailyWatchCount + 1 >= 5) {
+          toast.success("✅ Task complete! +2 coins", {
+            description: "Daily task: Watched 5 videos",
+          });
+        }
+      };
+
       // Show pre-roll ad the first time a video is seen (if not already pre-rolled)
       if (!preRolledVideosRef.current.has(id)) {
         preRolledVideosRef.current.add(id);
@@ -894,6 +1004,7 @@ export default function FeedPage() {
         // The actual TRACK_SEEN dispatch happens after pre-roll completes
         return;
       }
+      checkWatchTask();
       dispatch({ type: "TRACK_SEEN", videoId: id });
       // Track ad impression every time a video is seen (banner ad is always shown)
       dispatch({ type: "TRACK_AD_IMPRESSION", videoId: id });
@@ -905,13 +1016,31 @@ export default function FeedPage() {
         });
       }
     },
-    [dispatch, state.currentUser],
+    [dispatch, state.currentUser, state.users],
   );
 
   const handlePreRollComplete = useCallback(() => {
     const id = preRollVideoId;
     setPreRollVideoId(null);
     if (id) {
+      // Check watch task before dispatch
+      if (state.currentUser) {
+        const liveUser = state.users.find(
+          (u) => u.id === state.currentUser!.id,
+        );
+        const todayStr = new Date().toDateString();
+        const isToday = (liveUser?.dailyTasksDate ?? "") === todayStr;
+        const preDailyWatchCount = isToday
+          ? (liveUser?.dailyWatchCount ?? 0)
+          : 0;
+        const taskWatchAlreadyDone =
+          isToday && (liveUser?.taskWatchDone ?? false);
+        if (!taskWatchAlreadyDone && preDailyWatchCount + 1 >= 5) {
+          toast.success("✅ Task complete! +2 coins", {
+            description: "Daily task: Watched 5 videos",
+          });
+        }
+      }
       dispatch({ type: "TRACK_SEEN", videoId: id });
       // Track viewer referral progress after pre-roll completes too
       if (state.currentUser) {
@@ -921,12 +1050,12 @@ export default function FeedPage() {
         });
       }
     }
-  }, [preRollVideoId, dispatch, state.currentUser]);
+  }, [preRollVideoId, dispatch, state.currentUser, state.users]);
 
   // Intersection observer for active video tracking (For You tab only)
   // biome-ignore lint/correctness/useExhaustiveDependencies: feed.length intentionally re-runs observer when feed changes
   useEffect(() => {
-    if (activeTab !== "foryou") return;
+    if (activeTab !== "foryou" && activeTab !== "trending") return;
     const container = feedRef.current;
     if (!container) return;
 
@@ -958,6 +1087,7 @@ export default function FeedPage() {
   // Tab config
   const TABS: { id: FeedTab; label: string; ocid: string }[] = [
     { id: "foryou", label: "For You", ocid: "feed.foryou.tab" },
+    { id: "trending", label: "🔥 Trending", ocid: "feed.trending.tab" },
     { id: "following", label: "Following", ocid: "feed.following.tab" },
     { id: "long", label: "Long", ocid: "feed.long.tab" },
     { id: "premium", label: "Premium ✦", ocid: "feed.premium.tab" },
@@ -970,12 +1100,15 @@ export default function FeedPage() {
         className="absolute top-0 left-0 right-0 z-30 flex items-center gap-1 px-3 pt-3 pb-2"
         style={{
           background:
-            activeTab === "foryou"
+            activeTab === "foryou" || activeTab === "trending"
               ? "linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)"
               : "oklch(0.08 0.01 240 / 0.96)",
-          backdropFilter: activeTab !== "foryou" ? "blur(12px)" : undefined,
+          backdropFilter:
+            activeTab !== "foryou" && activeTab !== "trending"
+              ? "blur(12px)"
+              : undefined,
           borderBottom:
-            activeTab !== "foryou"
+            activeTab !== "foryou" && activeTab !== "trending"
               ? "1px solid rgba(255,255,255,0.06)"
               : "none",
         }}
@@ -1000,7 +1133,9 @@ export default function FeedPage() {
                         ? "linear-gradient(135deg, oklch(0.5 0.2 220), oklch(0.55 0.18 200))"
                         : tab.id === "following"
                           ? "linear-gradient(135deg, oklch(0.5 0.18 185), oklch(0.55 0.16 195))"
-                          : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))"
+                          : tab.id === "trending"
+                            ? "linear-gradient(135deg, oklch(0.55 0.22 50), oklch(0.6 0.25 30))"
+                            : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))"
                     : "transparent",
                 }}
               >
@@ -1064,6 +1199,58 @@ export default function FeedPage() {
 
             {/* Banner ad strip at bottom */}
             <BannerAd className="absolute bottom-16 left-0 right-0 z-20 pointer-events-none mx-3 mb-1" />
+          </motion.div>
+        )}
+
+        {/* ── Trending Tab: Vertical Reel Scroll sorted by engagement ── */}
+        {activeTab === "trending" && (
+          <motion.div
+            key="trending"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="w-full h-full"
+          >
+            {/* Trending header badge */}
+            <div className="absolute top-12 left-0 right-0 z-20 px-4 pt-2 pb-1 pointer-events-none">
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full w-fit"
+                style={{
+                  background: "oklch(0.55 0.22 50 / 0.85)",
+                  backdropFilter: "blur(8px)",
+                }}
+              >
+                <Flame className="w-3.5 h-3.5 text-orange-200" />
+                <span className="text-orange-100 text-xs font-semibold">
+                  Sorted by likes · views · comments · shares
+                </span>
+              </div>
+            </div>
+
+            <div ref={feedRef} className="feed-container h-full">
+              {trendingFeed.length === 0 ? (
+                <div
+                  data-ocid="feed.trending.empty_state"
+                  className="h-full flex flex-col items-center justify-center gap-3"
+                >
+                  <Flame className="w-10 h-10 text-orange-400/50" />
+                  <p className="text-white/60 text-sm">
+                    No trending videos yet
+                  </p>
+                </div>
+              ) : (
+                trendingFeed.map((video, index) => (
+                  <ReelCard
+                    key={video.id}
+                    video={video}
+                    index={index}
+                    isActive={index === activeIndex}
+                    onSeen={handleSeen}
+                  />
+                ))
+              )}
+            </div>
           </motion.div>
         )}
 

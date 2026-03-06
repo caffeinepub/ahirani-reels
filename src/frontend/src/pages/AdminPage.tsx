@@ -284,6 +284,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     | "overview"
     | "users"
     | "videos"
+    | "comments"
     | "withdrawals"
     | "upload"
     | "ads"
@@ -421,6 +422,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     "overview",
     "users",
     "videos",
+    "comments",
     "withdrawals",
     "upload",
     "ads",
@@ -1134,6 +1136,113 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 </TableBody>
               </Table>
             </div>
+          </div>
+        )}
+
+        {/* Comments tab */}
+        {activeTab === "comments" && (
+          <div className="space-y-4">
+            <h2 className="text-white/60 text-sm font-medium uppercase tracking-wider">
+              All Comments ({state.comments.length})
+            </h2>
+            {state.comments.length === 0 ? (
+              <div
+                data-ocid="admin.comments.empty_state"
+                className="text-center py-12 text-white/30 text-sm"
+              >
+                No comments yet
+              </div>
+            ) : (
+              <div className="rounded-2xl overflow-hidden border border-white/10">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-white/40 text-xs">
+                        User
+                      </TableHead>
+                      <TableHead className="text-white/40 text-xs">
+                        Comment
+                      </TableHead>
+                      <TableHead className="text-white/40 text-xs">
+                        Video
+                      </TableHead>
+                      <TableHead className="text-white/40 text-xs">
+                        Time
+                      </TableHead>
+                      <TableHead className="text-white/40 text-xs text-right">
+                        Action
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...state.comments]
+                      .sort((a, b) => b.createdAt - a.createdAt)
+                      .map((comment, idx) => {
+                        const commenter = state.users.find(
+                          (u) => u.id === comment.userId,
+                        );
+                        const video = state.videos.find(
+                          (v) => v.id === comment.videoId,
+                        );
+                        return (
+                          <TableRow
+                            key={comment.id}
+                            data-ocid={`admin.comments.row.${idx + 1}`}
+                            className="border-white/5 hover:bg-white/3"
+                          >
+                            <TableCell className="py-3">
+                              <div className="flex items-center gap-2">
+                                <Avatar className="w-7 h-7">
+                                  <AvatarImage src={commenter?.avatar} />
+                                  <AvatarFallback className="bg-white/10 text-white text-[10px]">
+                                    {commenter?.username?.[0]?.toUpperCase() ??
+                                      "?"}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-white/70 text-xs font-medium">
+                                  @{commenter?.username ?? "unknown"}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <p className="text-white text-xs max-w-[160px] truncate">
+                                {comment.text}
+                              </p>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <p className="text-white/40 text-[11px] max-w-[100px] truncate">
+                                {video?.caption ?? comment.videoId}
+                              </p>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <span className="text-white/30 text-[11px]">
+                                {formatTime(comment.createdAt)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="py-3 text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                data-ocid={`admin.comments.delete_button.${idx + 1}`}
+                                onClick={() => {
+                                  dispatch({
+                                    type: "DELETE_COMMENT",
+                                    commentId: comment.id,
+                                  });
+                                  toast.success("Comment deleted");
+                                }}
+                                className="h-7 px-2 text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         )}
 

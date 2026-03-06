@@ -63,10 +63,21 @@ function rowStyle(rank: number): React.CSSProperties {
 export default function LeaderboardPage() {
   const { state } = useApp();
 
-  // Top Creators — rank by totalLikes
+  const getUserVideos = (userId: string) =>
+    state.videos.filter((v) => v.uploaderId === userId && !v.isDeleted);
+
+  // Top Creators — composite score: likes + total views + followers
+  const creatorScore = (u: (typeof state.users)[0]) => {
+    const totalViews = getUserVideos(u.id).reduce(
+      (s, v) => s + (v.viewsCount ?? 0),
+      0,
+    );
+    return (u.totalLikes ?? 0) + totalViews + (u.followers ?? 0);
+  };
+
   const topCreators = [...state.users]
     .filter((u) => u.role === "artist")
-    .sort((a, b) => b.totalLikes - a.totalLikes)
+    .sort((a, b) => creatorScore(b) - creatorScore(a))
     .slice(0, 10);
 
   // Top Referrers — rank by referral count
@@ -93,9 +104,6 @@ export default function LeaderboardPage() {
         ((a.pendingEarnings ?? 0) + (a.totalEarnings ?? 0)),
     )
     .slice(0, 10);
-
-  const getUserVideos = (userId: string) =>
-    state.videos.filter((v) => v.uploaderId === userId && !v.isDeleted);
 
   return (
     <div className="h-full overflow-y-auto bg-background">
@@ -149,18 +157,21 @@ export default function LeaderboardPage() {
               style={{ background: "oklch(0.1 0.01 240 / 0.9)" }}
             >
               {/* Table header */}
-              <div className="px-4 py-3 border-b border-white/8 grid grid-cols-[28px_1fr_auto_auto] gap-2 items-center">
+              <div className="px-4 py-3 border-b border-white/8 grid grid-cols-[28px_1fr_auto_auto_auto] gap-2 items-center">
                 <span className="text-white/30 text-[10px] font-semibold uppercase tracking-wider">
                   #
                 </span>
                 <span className="text-white/30 text-[10px] font-semibold uppercase tracking-wider">
                   Creator
                 </span>
-                <span className="text-white/30 text-[10px] font-semibold uppercase tracking-wider w-14 text-right">
+                <span className="text-white/30 text-[10px] font-semibold uppercase tracking-wider w-12 text-right">
                   Likes
                 </span>
-                <span className="text-white/30 text-[10px] font-semibold uppercase tracking-wider w-14 text-right">
+                <span className="text-white/30 text-[10px] font-semibold uppercase tracking-wider w-12 text-right">
                   Views
+                </span>
+                <span className="text-white/30 text-[10px] font-semibold uppercase tracking-wider w-14 text-right">
+                  Followers
                 </span>
               </div>
 
@@ -187,7 +198,7 @@ export default function LeaderboardPage() {
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: i * 0.04 }}
-                        className="px-4 py-3 grid grid-cols-[28px_1fr_auto_auto] gap-2 items-center"
+                        className="px-4 py-3 grid grid-cols-[28px_1fr_auto_auto_auto] gap-2 items-center"
                         style={rowStyle(rank)}
                       >
                         <RankMedal rank={rank} />
@@ -215,17 +226,24 @@ export default function LeaderboardPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 w-14 justify-end">
+                        <div className="flex items-center gap-1 w-12 justify-end">
                           <Heart className="w-3 h-3 text-reels-pink fill-reels-pink" />
                           <span className="text-white/70 text-xs tabular-nums">
                             {formatCount(user.totalLikes)}
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-1 w-14 justify-end">
+                        <div className="flex items-center gap-1 w-12 justify-end">
                           <Eye className="w-3 h-3 text-blue-400" />
                           <span className="text-white/70 text-xs tabular-nums">
                             {formatCount(totalViews)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1 w-14 justify-end">
+                          <Users className="w-3 h-3 text-emerald-400" />
+                          <span className="text-white/70 text-xs tabular-nums">
+                            {formatCount(user.followers ?? 0)}
                           </span>
                         </div>
                       </motion.div>

@@ -9,13 +9,16 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  CircleDollarSign,
   Clock,
   Copy,
   Eye,
   Flame,
   Gift,
+  Heart,
   IndianRupee,
   Link2,
+  ListChecks,
   Megaphone,
   Play,
   ReceiptText,
@@ -24,6 +27,7 @@ import {
   Sparkles,
   Star,
   TrendingUp,
+  UserPlus,
   Users,
   Wallet,
   Zap,
@@ -46,6 +50,312 @@ import type {
 import { useApp } from "../context/AppContext";
 import { getReferralLink, shareReferralLink } from "../hooks/useReferralShare";
 import { formatCount, formatTime } from "../utils/trending";
+
+// ─── Coin Balance Card ────────────────────────────────────────────────────────
+
+function CoinBalanceCard() {
+  const { state } = useApp();
+  const user = state.currentUser;
+  const liveUser = user
+    ? (state.users.find((u) => u.id === user.id) ?? user)
+    : null;
+
+  if (!liveUser) return null;
+
+  const coins = liveUser.coins ?? 0;
+  const rupeesEquivalent = (coins / 100) * 10;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      data-ocid="wallet.coin_balance.card"
+      className="rounded-2xl relative overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(135deg, oklch(0.2 0.08 70), oklch(0.14 0.05 55))",
+        border: "1px solid oklch(0.78 0.2 85 / 0.4)",
+      }}
+    >
+      {/* Decorative glow */}
+      <div
+        className="absolute -top-6 -right-6 w-28 h-28 rounded-full pointer-events-none opacity-20"
+        style={{
+          background:
+            "radial-gradient(circle, oklch(0.88 0.22 80), transparent 70%)",
+        }}
+      />
+      <div className="relative z-10 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: "oklch(0.78 0.2 80 / 0.25)" }}
+            >
+              <CircleDollarSign className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-sm">Coin Balance</p>
+              <p className="text-amber-300/60 text-[10px]">100 coins = ₹10</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-amber-200 font-black text-3xl font-display leading-none">
+              {coins}
+            </p>
+            <p className="text-amber-300/60 text-[10px] mt-0.5">coins</p>
+          </div>
+        </div>
+        <div
+          className="rounded-xl flex items-center justify-between px-4 py-3"
+          style={{
+            background: "oklch(1 0 0 / 0.07)",
+            border: "1px solid oklch(1 0 0 / 0.12)",
+          }}
+        >
+          <span className="text-white/60 text-xs">Equivalent value</span>
+          <span className="text-amber-300 font-bold text-base">
+            ₹{rupeesEquivalent.toFixed(2)}
+          </span>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Daily Tasks Card ─────────────────────────────────────────────────────────
+
+function DailyTasksCard() {
+  const { state } = useApp();
+  const user = state.currentUser;
+  const liveUser = user
+    ? (state.users.find((u) => u.id === user.id) ?? user)
+    : null;
+
+  // Countdown to midnight
+  const [timeLeft, setTimeLeft] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const midnight = new Date();
+      midnight.setDate(midnight.getDate() + 1);
+      midnight.setHours(0, 0, 0, 0);
+      const diff = midnight.getTime() - now.getTime();
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(
+        `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`,
+      );
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  if (!liveUser) return null;
+
+  const todayStr = new Date().toDateString();
+  const isToday = (liveUser.dailyTasksDate ?? "") === todayStr;
+
+  // Use today's values if same day, otherwise show 0
+  const watchCount = isToday ? (liveUser.dailyWatchCount ?? 0) : 0;
+  const likeCount = isToday ? (liveUser.dailyLikeCount ?? 0) : 0;
+  const followCount = isToday ? (liveUser.dailyFollowCount ?? 0) : 0;
+  const shareCount = isToday ? (liveUser.dailyShareCount ?? 0) : 0;
+
+  const taskWatchDone = isToday && (liveUser.taskWatchDone ?? false);
+  const taskLikeDone = isToday && (liveUser.taskLikeDone ?? false);
+  const taskFollowDone = isToday && (liveUser.taskFollowDone ?? false);
+  const taskShareDone = isToday && (liveUser.taskShareDone ?? false);
+
+  const allDone =
+    taskWatchDone && taskLikeDone && taskFollowDone && taskShareDone;
+
+  const tasks = [
+    {
+      icon: <Eye className="w-4 h-4 text-blue-400" />,
+      label: "Watch 5 videos",
+      reward: 2,
+      current: Math.min(taskWatchDone ? 5 : watchCount, 5),
+      target: 5,
+      done: taskWatchDone,
+      ocid: "wallet.tasks.watch_task",
+    },
+    {
+      icon: <Heart className="w-4 h-4 text-reels-pink" />,
+      label: "Like 3 videos",
+      reward: 1,
+      current: Math.min(taskLikeDone ? 3 : likeCount, 3),
+      target: 3,
+      done: taskLikeDone,
+      ocid: "wallet.tasks.like_task",
+    },
+    {
+      icon: <UserPlus className="w-4 h-4 text-emerald-400" />,
+      label: "Follow 1 artist",
+      reward: 1,
+      current: Math.min(taskFollowDone ? 1 : followCount, 1),
+      target: 1,
+      done: taskFollowDone,
+      ocid: "wallet.tasks.follow_task",
+    },
+    {
+      icon: <Share2 className="w-4 h-4 text-violet-400" />,
+      label: "Share 1 video",
+      reward: 1,
+      current: Math.min(taskShareDone ? 1 : shareCount, 1),
+      target: 1,
+      done: taskShareDone,
+      ocid: "wallet.tasks.share_task",
+    },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      data-ocid="wallet.tasks.card"
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(135deg, oklch(0.13 0.04 200 / 0.95), oklch(0.10 0.02 190 / 0.98))",
+        border: "1px solid oklch(0.55 0.15 200 / 0.3)",
+      }}
+    >
+      {/* Header */}
+      <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ background: "oklch(0.55 0.18 200 / 0.25)" }}
+          >
+            <ListChecks className="w-5 h-5 text-cyan-400" />
+          </div>
+          <div>
+            <h3 className="text-white font-bold text-base">Daily Tasks</h3>
+            <p className="text-white/40 text-[10px]">
+              Complete tasks to earn coins
+            </p>
+          </div>
+        </div>
+        {allDone ? (
+          <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            <Check className="w-2.5 h-2.5" />
+            All Done!
+          </span>
+        ) : (
+          <span className="text-white/30 text-[10px] font-mono">
+            {timeLeft}
+          </span>
+        )}
+      </div>
+
+      {/* Tasks list */}
+      <div className="px-5 pb-4 space-y-3">
+        {tasks.map((task) => {
+          const progress = (task.current / task.target) * 100;
+          return (
+            <div
+              key={task.ocid}
+              data-ocid={task.ocid}
+              className="rounded-xl p-3.5"
+              style={{
+                background: task.done
+                  ? "oklch(0.55 0.18 160 / 0.12)"
+                  : "oklch(1 0 0 / 0.05)",
+                border: task.done
+                  ? "1px solid oklch(0.55 0.18 160 / 0.25)"
+                  : "1px solid oklch(1 0 0 / 0.08)",
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{
+                      background: task.done
+                        ? "oklch(0.55 0.18 160 / 0.2)"
+                        : "oklch(1 0 0 / 0.08)",
+                    }}
+                  >
+                    {task.done ? (
+                      <Check className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      task.icon
+                    )}
+                  </div>
+                  <div>
+                    <p
+                      className={`text-sm font-medium ${task.done ? "text-emerald-400" : "text-white"}`}
+                    >
+                      {task.label}
+                    </p>
+                    <p className="text-white/40 text-[10px]">
+                      {task.done
+                        ? `Done! +${task.reward} coin${task.reward > 1 ? "s" : ""}`
+                        : `${task.current}/${task.target}`}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={`text-sm font-bold ${task.done ? "text-emerald-400" : "text-amber-300"}`}
+                >
+                  +{task.reward}🪙
+                </span>
+              </div>
+              {/* Progress bar */}
+              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(progress, 100)}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  className="h-full rounded-full"
+                  style={{
+                    background: task.done
+                      ? "oklch(0.65 0.2 160)"
+                      : "linear-gradient(90deg, oklch(0.6 0.18 200), oklch(0.7 0.2 210))",
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* All tasks complete message */}
+        {allDone && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-center"
+          >
+            <p className="text-emerald-300 text-xs font-semibold">
+              🎉 All tasks complete! Come back tomorrow.
+            </p>
+            <p className="text-white/30 text-[10px] mt-1 font-mono">
+              Resets in {timeLeft}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Coins earned today */}
+        {!allDone && (
+          <div className="flex items-center justify-between rounded-xl bg-white/5 border border-white/8 px-3.5 py-2.5">
+            <span className="text-white/50 text-xs">Coins from tasks</span>
+            <span className="text-amber-300 font-bold text-sm">
+              {(taskWatchDone ? 2 : 0) +
+                (taskLikeDone ? 1 : 0) +
+                (taskFollowDone ? 1 : 0) +
+                (taskShareDone ? 1 : 0)}{" "}
+              / 5 🪙
+            </span>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
 
 // ─── Daily Bonus Card ─────────────────────────────────────────────────────────
 
@@ -606,6 +916,10 @@ function TxTypeBadge({ txType }: { txType: Transaction["txType"] }) {
     watch_reward: {
       label: "Watch Reward",
       className: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    },
+    task_reward: {
+      label: "Task Reward",
+      className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     },
   };
   const { label, className } = config[txType];
@@ -2343,18 +2657,25 @@ export default function WalletPage() {
 
       <div className="px-4 py-4 pb-24">
         <Tabs defaultValue="wallet">
-          <TabsList className="w-full bg-white/5 border border-white/10 mb-5 h-10">
+          <TabsList className="w-full bg-white/5 border border-white/10 mb-5 h-10 overflow-x-auto flex-nowrap">
             <TabsTrigger
               value="wallet"
               data-ocid="wallet.wallet_tab"
-              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs"
+              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
               Wallet
             </TabsTrigger>
             <TabsTrigger
+              value="tasks"
+              data-ocid="wallet.tasks_tab"
+              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
+            >
+              ✅ Tasks
+            </TabsTrigger>
+            <TabsTrigger
               value="earnings"
               data-ocid="wallet.earnings_tab"
-              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs"
+              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
               {liveUser.role === "viewer" ? "Refs" : "Earn"}
             </TabsTrigger>
@@ -2362,7 +2683,7 @@ export default function WalletPage() {
               <TabsTrigger
                 value="points"
                 data-ocid="wallet.points_tab"
-                className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs"
+                className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
               >
                 ⭐ Points
               </TabsTrigger>
@@ -2370,25 +2691,48 @@ export default function WalletPage() {
             <TabsTrigger
               value="rewards"
               data-ocid="wallet.rewards_tab"
-              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs"
+              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
               🎁 Rewards
             </TabsTrigger>
             <TabsTrigger
               value="referral"
               data-ocid="wallet.referral_tab"
-              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs"
+              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
               Share
             </TabsTrigger>
             <TabsTrigger
               value="transactions"
               data-ocid="wallet.transactions_tab"
-              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs"
+              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
               History
             </TabsTrigger>
           </TabsList>
+
+          {/* ── Tasks Tab ──────────────────────────────────────────────────── */}
+          <TabsContent value="tasks" className="space-y-5 mt-0">
+            <CoinBalanceCard />
+            <DailyTasksCard />
+            {/* Info card */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="rounded-2xl border border-white/8 bg-white/3 px-5 py-4 space-y-2"
+            >
+              <p className="text-white/60 text-xs font-semibold uppercase tracking-wider">
+                How it works
+              </p>
+              <ul className="space-y-1.5 text-white/40 text-xs">
+                <li>• Complete all 4 daily tasks to earn up to 5 coins</li>
+                <li>• 100 coins = ₹10 redeemable in wallet</li>
+                <li>• Tasks reset every day at midnight</li>
+                <li>• Coins are credited instantly on task completion</li>
+              </ul>
+            </motion.div>
+          </TabsContent>
 
           {/* ── Wallet Tab ─────────────────────────────────────────────────── */}
           <TabsContent value="wallet" className="space-y-5 mt-0">

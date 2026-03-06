@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { toast } from "sonner";
 import { useApp, useIsFollowing, useUserById } from "../context/AppContext";
 import { formatCount } from "../utils/trending";
 import CreatorBadge from "./CreatorBadge";
@@ -101,10 +102,21 @@ export function ArtistProfileSheet({
 
   const handleFollowToggle = () => {
     if (!state.currentUser || isOwnProfile) return;
+    // Check task state before dispatch
+    const liveUser = state.users.find((u) => u.id === state.currentUser!.id);
+    const todayStr = new Date().toDateString();
+    const isToday = (liveUser?.dailyTasksDate ?? "") === todayStr;
+    const taskFollowAlreadyDone =
+      isToday && (liveUser?.taskFollowDone ?? false);
     dispatch({
       type: isFollowing ? "UNFOLLOW" : "FOLLOW",
       targetUserId: artistId,
     });
+    if (!isFollowing && !taskFollowAlreadyDone) {
+      toast.success("✅ Task complete! +1 coin", {
+        description: "Daily task: Followed an artist",
+      });
+    }
   };
 
   if (!artist) return null;
