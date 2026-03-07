@@ -89,16 +89,6 @@ export class ExternalBlob {
         return this;
     }
 }
-export interface LocalAd {
-    id: string;
-    durationDays: bigint;
-    linkUrl: string;
-    tagline: string;
-    businessName: string;
-    isActive: boolean;
-    imageUrl: string;
-    startDate: bigint;
-}
 export type UserId = bigint;
 export interface _CaffeineStorageCreateCertificateResult {
     method: string;
@@ -119,14 +109,8 @@ export interface backendInterface {
     _caffeineStorageRefillCashier(refillInformation: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult>;
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     addContent(_userId: UserId, name: string, description: string, blob: ExternalBlob): Promise<void>;
-    addEducation(_userId: UserId, _education: string): Promise<void>;
-    addLocalAd(_userId: UserId, businessName: string, imageUrl: string, linkUrl: string, tagline: string, durationDays: bigint, startDate: bigint, isActive: boolean): Promise<void>;
-    adminAddAvatar(_userId: UserId, _avatar: string): Promise<void>;
     adminAddUser(userId: UserId, username: string): Promise<void>;
-    getActiveLocalAds(): Promise<Array<LocalAd>>;
-    getAllLocalAds(): Promise<Array<LocalAd>>;
     getUser(_userId: UserId): Promise<Array<UserId>>;
-    sendOtp(_userId: UserId): Promise<void>;
 }
 import type { ExternalBlob as _ExternalBlob, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -229,48 +213,6 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async addEducation(arg0: UserId, arg1: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.addEducation(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.addEducation(arg0, arg1);
-            return result;
-        }
-    }
-    async addLocalAd(arg0: UserId, arg1: string, arg2: string, arg3: string, arg4: string, arg5: bigint, arg6: bigint, arg7: boolean): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.addLocalAd(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.addLocalAd(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-            return result;
-        }
-    }
-    async adminAddAvatar(arg0: UserId, arg1: string): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.adminAddAvatar(arg0, arg1);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.adminAddAvatar(arg0, arg1);
-            return result;
-        }
-    }
     async adminAddUser(arg0: UserId, arg1: string): Promise<void> {
         if (this.processError) {
             try {
@@ -285,34 +227,6 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getActiveLocalAds(): Promise<Array<LocalAd>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getActiveLocalAds();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getActiveLocalAds();
-            return result;
-        }
-    }
-    async getAllLocalAds(): Promise<Array<LocalAd>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getAllLocalAds();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getAllLocalAds();
-            return result;
-        }
-    }
     async getUser(arg0: UserId): Promise<Array<UserId>> {
         if (this.processError) {
             try {
@@ -324,20 +238,6 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getUser(arg0);
-            return result;
-        }
-    }
-    async sendOtp(arg0: UserId): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.sendOtp(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.sendOtp(arg0);
             return result;
         }
     }

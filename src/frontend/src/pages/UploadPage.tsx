@@ -2,11 +2,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  Camera,
   Crown,
   Film,
   Hash,
+  ImageIcon,
   Loader2,
   Lock,
   Type,
@@ -82,7 +85,9 @@ function formatExpiryDate(ts: number): string {
 export default function UploadPage() {
   const { state, dispatch } = useApp();
   const { actor } = useActor();
+  const navigate = useNavigate();
   const user = state.currentUser;
+  const subPrice = state.subscriptionPrice ?? 600;
   const canUpload =
     user?.role === "artist" &&
     user?.subscriptionStatus === "active" &&
@@ -90,6 +95,8 @@ export default function UploadPage() {
   const [subscribing, setSubscribing] = useState(false);
   const [uploadReminderDismissed, setUploadReminderDismissed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoDragOver, setPhotoDragOver] = useState(false);
 
   // Subscription expiry reminder for active upload form
   const subExpiry = user?.subscriptionExpiry ?? 0;
@@ -115,6 +122,17 @@ export default function UploadPage() {
     setVideoFile(file);
     const url = URL.createObjectURL(file);
     setVideoUrl(url);
+  };
+
+  const handlePhotoSelect = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+    navigate({
+      to: "/edit-photo",
+      state: { photoFile: file } as never,
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -315,8 +333,8 @@ export default function UploadPage() {
                   )}
 
                   <p className="text-white/60 text-sm leading-relaxed max-w-xs mx-auto">
-                    Please renew your ₹600 yearly artist subscription to upload
-                    videos.
+                    Please renew your ₹{subPrice} yearly artist subscription to
+                    upload videos.
                   </p>
                 </div>
 
@@ -346,7 +364,7 @@ export default function UploadPage() {
                   ) : (
                     <span className="flex items-center gap-2.5">
                       <Crown className="w-4 h-4 shrink-0" />
-                      Renew Artist Subscription ₹600 / Year
+                      Renew Artist Subscription ₹{subPrice} / Year
                     </span>
                   )}
                 </Button>
@@ -407,6 +425,102 @@ export default function UploadPage() {
             </button>
           </motion.div>
         )}
+
+        {/* Record with Camera CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-white/10 overflow-hidden"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.12 0.04 15 / 0.8) 0%, oklch(0.1 0.03 350 / 0.6) 100%)",
+          }}
+        >
+          <div className="flex items-center gap-4 px-4 py-4">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+              }}
+            >
+              <Camera className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold text-sm">
+                Record with Camera
+              </p>
+              <p className="text-white/50 text-xs leading-tight mt-0.5">
+                Shoot directly in-app with effects &amp; filters
+              </p>
+            </div>
+            <Button
+              data-ocid="upload.record_camera_button"
+              onClick={() => navigate({ to: "/camera", search: {} })}
+              size="sm"
+              className="shrink-0 font-semibold text-white border-0"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+              }}
+            >
+              Record Now
+            </Button>
+          </div>
+        </motion.div>
+
+        {/* Take Photo CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="rounded-2xl border border-white/10 overflow-hidden"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.1 0.04 150 / 0.8) 0%, oklch(0.09 0.03 165 / 0.6) 100%)",
+          }}
+        >
+          <div className="flex items-center gap-4 px-4 py-4">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.55 0.22 150), oklch(0.5 0.2 165))",
+              }}
+            >
+              <ImageIcon className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold text-sm">Take a Photo</p>
+              <p className="text-white/50 text-xs leading-tight mt-0.5">
+                Capture moments with filters &amp; post
+              </p>
+            </div>
+            <Button
+              data-ocid="upload.take_photo_button"
+              onClick={() =>
+                navigate({ to: "/camera", search: { mode: "photo" } })
+              }
+              size="sm"
+              className="shrink-0 font-semibold text-white border-0"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.55 0.22 150), oklch(0.5 0.2 165))",
+              }}
+            >
+              Take Photo →
+            </Button>
+          </div>
+        </motion.div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-white/10" />
+          <span className="text-white/30 text-xs font-medium">
+            or upload a file
+          </span>
+          <div className="flex-1 h-px bg-white/10" />
+        </div>
 
         {/* Video upload zone */}
         {!videoUrl ? (
@@ -487,6 +601,59 @@ export default function UploadPage() {
             )}
           </motion.div>
         )}
+
+        {/* Photo upload section */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-white/10" />
+          <span className="text-white/30 text-xs font-medium">
+            or upload a photo
+          </span>
+          <div className="flex-1 h-px bg-white/10" />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          data-ocid="upload.photo_dropzone"
+          className={`relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all ${
+            photoDragOver
+              ? "border-emerald-500 bg-emerald-500/10"
+              : "border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/8"
+          }`}
+          style={{ minHeight: 140 }}
+          onClick={() => photoInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setPhotoDragOver(true);
+          }}
+          onDragLeave={() => setPhotoDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setPhotoDragOver(false);
+            const file = e.dataTransfer.files[0];
+            if (file) handlePhotoSelect(file);
+          }}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
+            <ImageIcon className="w-6 h-6 text-emerald-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-white font-semibold text-sm">
+              Tap to select photo
+            </p>
+            <p className="text-white/30 text-xs mt-0.5">JPG, PNG, WEBP</p>
+          </div>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handlePhotoSelect(file);
+            }}
+          />
+        </motion.div>
 
         {/* Video type selector */}
         <motion.div

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowRight,
@@ -45,7 +45,6 @@ type SocialProvider = "google" | "facebook";
 
 export default function AuthPage() {
   const { state, dispatch } = useApp();
-  const navigate = useNavigate();
   const { t } = useLang();
   const [step, setStep] = useState<Step>("method");
   const [phone, setPhone] = useState("");
@@ -92,31 +91,20 @@ export default function AuthPage() {
     }
   }, []);
 
-  // Secret long-press on logo: hold 5 seconds to open hidden admin panel
-  const [logoPressProgress, setLogoPressProgress] = useState(0);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
+  // Long-press logo (500ms) → navigate to admin login (hidden entry)
+  const logoLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleLogoPointerDown = () => {
-    let elapsed = 0;
-    longPressIntervalRef.current = setInterval(() => {
-      elapsed += 100;
-      setLogoPressProgress(Math.min((elapsed / 5000) * 100, 100));
-    }, 100);
-    longPressTimerRef.current = setTimeout(() => {
-      clearInterval(longPressIntervalRef.current!);
-      setLogoPressProgress(0);
-      navigate({ to: "/admin" });
-    }, 5000);
+    logoLongPressTimer.current = setTimeout(() => {
+      window.location.href = "/admin-login";
+    }, 500);
   };
 
   const handleLogoPointerUp = () => {
-    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-    if (longPressIntervalRef.current)
-      clearInterval(longPressIntervalRef.current);
-    setLogoPressProgress(0);
+    if (logoLongPressTimer.current) {
+      clearTimeout(logoLongPressTimer.current);
+      logoLongPressTimer.current = null;
+    }
   };
 
   const startCountdown = () => {
@@ -449,59 +437,29 @@ export default function AuthPage() {
           "radial-gradient(ellipse at top, oklch(0.12 0.05 15) 0%, oklch(0 0 0) 60%)",
       }}
     >
-      {/* Logo (long-press 5s = hidden admin entry) */}
+      {/* Logo */}
       <motion.div
         initial={{ opacity: 0, y: -30 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col items-center mb-10"
       >
         <div
-          data-ocid="auth.logo_longpress"
+          data-ocid="auth.logo"
+          className="relative w-20 h-20 rounded-2xl flex items-center justify-center mb-4 cursor-pointer select-none"
+          onContextMenu={(e) => e.preventDefault()}
           onPointerDown={handleLogoPointerDown}
           onPointerUp={handleLogoPointerUp}
           onPointerLeave={handleLogoPointerUp}
-          onContextMenu={(e) => e.preventDefault()}
-          className="relative w-20 h-20 rounded-2xl flex items-center justify-center mb-4 select-none cursor-pointer"
-          style={{
-            WebkitUserSelect: "none",
-          }}
+          onTouchStart={handleLogoPointerDown}
+          onTouchEnd={handleLogoPointerUp}
         >
           <img
-            src="/assets/generated/fakt-ahirani-logo.dim_400x400.png"
+            src="/assets/generated/fakt-ahirani-logo-v2.dim_200x200.png"
             alt="फक्त अहिराणी"
-            className="w-full h-full object-cover rounded-2xl"
+            className="w-full h-full object-cover rounded-2xl pointer-events-none select-none"
             draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
           />
-          {logoPressProgress > 0 && (
-            <svg
-              className="absolute inset-0 w-full h-full rounded-2xl pointer-events-none"
-              viewBox="0 0 80 80"
-              aria-label="Loading admin panel"
-              role="img"
-            >
-              <circle
-                cx="40"
-                cy="40"
-                r="37"
-                fill="none"
-                stroke="rgba(255,255,255,0.15)"
-                strokeWidth="3"
-              />
-              <circle
-                cx="40"
-                cy="40"
-                r="37"
-                fill="none"
-                stroke="white"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeDasharray={`${2 * Math.PI * 37}`}
-                strokeDashoffset={`${2 * Math.PI * 37 * (1 - logoPressProgress / 100)}`}
-                transform="rotate(-90 40 40)"
-                style={{ transition: "stroke-dashoffset 0.1s linear" }}
-              />
-            </svg>
-          )}
         </div>
         <h1 className="font-display text-3xl font-bold text-white tracking-tight">
           फक्त अहिराणी
@@ -1514,6 +1472,17 @@ export default function AuthPage() {
           About / आमच्याबद्दल
         </Link>
       </p>
+
+      {/* Admin link */}
+      <div className="text-center mt-4">
+        <a
+          href="/admin-login"
+          data-ocid="auth.admin_link"
+          className="text-white/20 text-xs hover:text-white/40 transition-colors"
+        >
+          Admin
+        </a>
+      </div>
     </div>
   );
 }

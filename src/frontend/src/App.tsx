@@ -11,13 +11,18 @@ import BottomNav from "./components/BottomNav";
 import { AppProvider, useApp } from "./context/AppContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import AboutPage from "./pages/AboutPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminPage from "./pages/AdminPage";
 import AgePolicyPage from "./pages/AgePolicyPage";
 import AuthPage from "./pages/AuthPage";
+import CameraRecordPage from "./pages/CameraRecordPage";
 import ContactPage from "./pages/ContactPage";
+import EditPhotoPage from "./pages/EditPhotoPage";
+import EditVideoPage from "./pages/EditVideoPage";
 import FeedPage from "./pages/FeedPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
 import LivePage from "./pages/LivePage";
+import MusicLibraryPage from "./pages/MusicLibraryPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import ProfilePage from "./pages/ProfilePage";
 import SearchPage from "./pages/SearchPage";
@@ -34,6 +39,7 @@ function RootComponent() {
 
   // Admin + Privacy + Terms + Contact + Age Policy + About routes - no auth guard
   if (
+    pathname.startsWith("/admin-login") ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/privacy") ||
     pathname.startsWith("/terms") ||
@@ -43,6 +49,20 @@ function RootComponent() {
   ) {
     return (
       <div className="phone-frame overflow-y-auto">
+        <Outlet />
+      </div>
+    );
+  }
+
+  // Full-screen camera routes — no BottomNav, no scroll wrapper
+  // These are accessible to both logged-in users and admin (no auth guard needed here)
+  if (
+    pathname.startsWith("/camera") ||
+    pathname.startsWith("/edit-video") ||
+    pathname.startsWith("/edit-photo")
+  ) {
+    return (
+      <div className="phone-frame overflow-hidden">
         <Outlet />
       </div>
     );
@@ -115,6 +135,12 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
+const adminLoginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin-login",
+  component: AdminLoginPage,
+});
+
 const liveRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/live",
@@ -151,6 +177,36 @@ const aboutRoute = createRoute({
   component: AboutPage,
 });
 
+const cameraRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/camera",
+  component: CameraRecordPage,
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { from?: string; mode?: string } => ({
+    from: typeof search.from === "string" ? search.from : undefined,
+    mode: typeof search.mode === "string" ? search.mode : undefined,
+  }),
+});
+
+const editVideoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/edit-video",
+  component: EditVideoPage,
+});
+
+const editPhotoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/edit-photo",
+  component: EditPhotoPage,
+});
+
+const musicLibraryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/music-library",
+  component: MusicLibraryPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   uploadRoute,
@@ -159,12 +215,17 @@ const routeTree = rootRoute.addChildren([
   searchRoute,
   leaderboardRoute,
   adminRoute,
+  adminLoginRoute,
   liveRoute,
   privacyRoute,
   termsRoute,
   contactRoute,
   agePolicyRoute,
   aboutRoute,
+  cameraRoute,
+  editVideoRoute,
+  editPhotoRoute,
+  musicLibraryRoute,
 ]);
 
 const router = createRouter({ routeTree });

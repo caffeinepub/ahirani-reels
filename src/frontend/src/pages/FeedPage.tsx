@@ -65,7 +65,23 @@ import {
 
 // ─── Video Type Badge ─────────────────────────────────────────────────────────
 
-function VideoTypeBadge({ type }: { type: VideoType }) {
+function VideoTypeBadge({
+  type,
+  mediaType,
+}: {
+  type: VideoType;
+  mediaType?: "video" | "photo";
+}) {
+  if (mediaType === "photo") {
+    return (
+      <Badge
+        variant="secondary"
+        className="text-[9px] px-1.5 py-0 font-semibold tracking-wide bg-emerald-500/80 text-white border-transparent"
+      >
+        📷 Photo
+      </Badge>
+    );
+  }
   const config = {
     reel: {
       label: "Reel",
@@ -217,9 +233,24 @@ function ReelCard({
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const isFollowing = useIsFollowing(video.uploaderId);
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const ocidIndex = index + 1;
+  const isPhoto = video.mediaType === "photo";
+
+  // Tap-to-play toggle
+  const handleVideoTap = () => {
+    const vid = videoRef.current;
+    if (!vid || isPhoto || isPremiumLocked) return;
+    if (vid.paused) {
+      vid.play().catch(() => {});
+      setIsPaused(false);
+    } else {
+      vid.pause();
+      setIsPaused(true);
+    }
+  };
 
   // Check if promotion is active
   const isActivePromotion =
@@ -227,13 +258,47 @@ function ReelCard({
     video.promotionExpiry &&
     video.promotionExpiry > Date.now();
 
-  // Autoplay control
+  // Autoplay control (video only)
   useEffect(() => {
+    if (isPhoto) {
+      // For photos: trigger seen after 1s of being active
+      if (isActive) {
+        seenTimerRef.current = setTimeout(() => onSeen(video.id), 1000);
+      } else {
+        if (seenTimerRef.current) clearTimeout(seenTimerRef.current);
+      }
+      return () => {
+        if (seenTimerRef.current) clearTimeout(seenTimerRef.current);
+      };
+    }
     const vid = videoRef.current;
     if (!vid) return;
+
     if (isActive) {
-      vid.play().catch(() => {});
-      seenTimerRef.current = setTimeout(() => onSeen(video.id), 2000);
+      const tryPlay = () => {
+        vid.play().catch(() => {
+          // Retry after short delay — handles blob URLs that need buffering
+          setTimeout(() => vid.play().catch(() => {}), 400);
+        });
+      };
+
+      if (vid.readyState === 0) {
+        // Not loaded yet — load first, then play on canplay event
+        vid.load();
+        const onCanPlay = () => {
+          tryPlay();
+          vid.removeEventListener("canplay", onCanPlay);
+        };
+        vid.addEventListener("canplay", onCanPlay);
+        // Fallback: try playing after 800ms even without event
+        seenTimerRef.current = setTimeout(() => {
+          vid.removeEventListener("canplay", onCanPlay);
+          tryPlay();
+        }, 800);
+      } else {
+        tryPlay();
+        seenTimerRef.current = setTimeout(() => onSeen(video.id), 2000);
+      }
     } else {
       vid.pause();
       vid.currentTime = 0;
@@ -242,7 +307,7 @@ function ReelCard({
     return () => {
       if (seenTimerRef.current) clearTimeout(seenTimerRef.current);
     };
-  }, [isActive, video.id, onSeen]);
+  }, [isActive, video.id, onSeen, isPhoto]);
 
   const handleLike = () => {
     if (!state.currentUser) return;
@@ -311,21 +376,74 @@ function ReelCard({
       className="reel-card relative w-full flex-shrink-0"
       style={{ height: "100dvh" }}
     >
-      {/* Video */}
-      <video
-        ref={videoRef}
-        src={video.url}
-        className={`absolute inset-0 w-full h-full object-cover ${isPremiumLocked ? "blur" : ""}`}
-        style={isPremiumLocked ? { filter: "blur(4px)" } : {}}
-        muted
-        loop
-        playsInline
-      >
-        <track kind="captions" />
-      </video>
+      {/* Video or Photo */}
+      {isPhoto ? (
+        <img
+          src={video.url}
+          alt={video.caption}
+          className="absolute inset-0 w-full h-full object-cover"
+          style={isPremiumLocked ? { filter: "blur(4px)" } : {}}
+        />
+      ) : (
+        <>
+          <video
+            ref={videoRef}
+            className={`absolute inset-0 w-full h-full object-cover ${isPremiumLocked ? "blur" : ""}`}
+            style={isPremiumLocked ? { filter: "blur(4px)" } : {}}
+            src={video.url}
+            muted
+            loop
+            playsInline
+            preload="auto"
+            onError={(e) => {
+              // Retry load on error (handles intermittent blob URL failures)
+              const vid = e.currentTarget;
+              setTimeout(() => {
+                vid.load();
+                if (isActive) vid.play().catch(() => {});
+              }, 600);
+            }}
+            onLoadedMetadata={(e) => {
+              // Auto-play once metadata is available if this reel is active
+              if (isActive) {
+                e.currentTarget.play().catch(() => {});
+              }
+            }}
+            onPlay={() => setIsPaused(false)}
+            onPause={() => setIsPaused(true)}
+          >
+            <track kind="captions" />
+          </video>
+          {/* Tap-to-play overlay */}
+          <button
+            type="button"
+            aria-label={isPaused ? "Play video" : "Pause video"}
+            onClick={handleVideoTap}
+            className="absolute inset-0 z-[5] w-full h-full"
+            style={{ background: "transparent" }}
+          />
+          {/* Paused indicator */}
+          {isPaused && (
+            <div className="absolute inset-0 z-[6] flex items-center justify-center pointer-events-none">
+              <div className="w-16 h-16 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="white"
+                  className="w-8 h-8 ml-1"
+                  role="img"
+                  aria-label="Play"
+                >
+                  <title>Play</title>
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Gradient overlay */}
-      <div className="absolute inset-0 gradient-overlay" />
+      <div className="absolute inset-0 gradient-overlay pointer-events-none" />
 
       {/* Premium locked overlay */}
       {isPremiumLocked && (
@@ -344,9 +462,29 @@ function ReelCard({
         </div>
       )}
 
+      {/* Featured badge (top-left, above sponsored) */}
+      {video.isFeatured && (
+        <div className="absolute top-4 left-3 z-10">
+          <Badge
+            variant="secondary"
+            className="text-[9px] px-2 py-0.5 font-bold tracking-wide"
+            style={{
+              background: "oklch(0.6 0.2 80 / 0.92)",
+              color: "white",
+              borderColor: "transparent",
+            }}
+          >
+            ⭐ Featured
+          </Badge>
+        </div>
+      )}
+
       {/* Sponsored badge (top-left) */}
       {isActivePromotion && (
-        <div className="absolute top-4 left-3 z-10 flex items-center gap-2">
+        <div
+          className="absolute left-3 z-10 flex items-center gap-2"
+          style={{ top: video.isFeatured ? "2.5rem" : "1rem" }}
+        >
           <Badge
             variant="secondary"
             className="text-[9px] px-2 py-0.5 font-bold tracking-wide"
@@ -364,9 +502,20 @@ function ReelCard({
       {/* Video type badge + report dropdown */}
       <div
         className="absolute z-10 flex items-center gap-2"
-        style={{ top: isActivePromotion ? "2.5rem" : "1rem", left: "0.75rem" }}
+        style={{
+          top:
+            video.isFeatured && isActivePromotion
+              ? "4rem"
+              : video.isFeatured || isActivePromotion
+                ? "2.5rem"
+                : "1rem",
+          left: "0.75rem",
+        }}
       >
-        <VideoTypeBadge type={video.videoType ?? "reel"} />
+        <VideoTypeBadge
+          type={video.videoType ?? "reel"}
+          mediaType={video.mediaType}
+        />
       </div>
 
       {/* Report "..." button */}
@@ -700,9 +849,28 @@ function VideoCard({
           : undefined,
       }}
     >
+      {/* Featured badge */}
+      {video.isFeatured && (
+        <div className="absolute top-2 left-2 z-10">
+          <Badge
+            variant="secondary"
+            className="text-[9px] px-1.5 py-0.5 font-bold"
+            style={{
+              background: "oklch(0.6 0.2 80 / 0.92)",
+              color: "white",
+              borderColor: "transparent",
+            }}
+          >
+            ⭐ Featured
+          </Badge>
+        </div>
+      )}
       {/* Sponsored badge */}
       {isActivePromotion && (
-        <div className="absolute top-2 left-2 z-10">
+        <div
+          className="absolute left-2 z-10"
+          style={{ top: video.isFeatured ? "1.6rem" : "0.5rem" }}
+        >
           <Badge
             variant="secondary"
             className="text-[9px] px-1.5 py-0.5 font-bold"
@@ -722,21 +890,33 @@ function VideoCard({
           className="relative flex-shrink-0 rounded-l-2xl overflow-hidden"
           style={{ width: 130, minHeight: 180 }}
         >
-          <video
-            src={video.url}
-            className={`w-full h-full object-cover ${isLocked ? "" : ""}`}
-            style={{
-              height: "100%",
-              filter: isLocked
-                ? "blur(6px) brightness(0.5)"
-                : "brightness(0.85)",
-            }}
-            muted
-            playsInline
-            preload="metadata"
-          >
-            <track kind="captions" />
-          </video>
+          {video.mediaType === "photo" ? (
+            <img
+              src={video.url}
+              alt={video.caption}
+              className="w-full h-full object-cover"
+              style={{
+                height: "100%",
+                filter: isLocked ? "blur(6px) brightness(0.5)" : undefined,
+              }}
+            />
+          ) : (
+            <video
+              src={video.url}
+              className="w-full h-full object-cover"
+              style={{
+                height: "100%",
+                filter: isLocked
+                  ? "blur(6px) brightness(0.5)"
+                  : "brightness(0.85)",
+              }}
+              muted
+              playsInline
+              preload="metadata"
+            >
+              <track kind="captions" />
+            </video>
+          )}
 
           {/* Duration badge */}
           <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/70 rounded-full px-2 py-0.5">
@@ -777,7 +957,10 @@ function VideoCard({
               </button>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              <VideoTypeBadge type={video.videoType ?? "reel"} />
+              <VideoTypeBadge
+                type={video.videoType ?? "reel"}
+                mediaType={video.mediaType}
+              />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -1062,11 +1245,15 @@ export default function FeedPage() {
     state.currentUser?.role === "artist" &&
     state.currentUser?.subscriptionStatus === "active";
 
-  const feed = getTrendingFeed(
+  const feedRaw = getTrendingFeed(
     state.videos,
     state.seenVideoIds,
     state.likedVideoIds,
     state.followingIds,
+  );
+  // Featured videos appear first in the For You feed
+  const feed = [...feedRaw].sort(
+    (a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0),
   );
   const longVideos = state.videos.filter(
     (v) => !v.isDeleted && v.videoType === "long",

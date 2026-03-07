@@ -11,16 +11,6 @@ import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
 export type ExternalBlob = Uint8Array;
-export interface LocalAd {
-  'id' : string,
-  'durationDays' : bigint,
-  'linkUrl' : string,
-  'tagline' : string,
-  'businessName' : string,
-  'isActive' : boolean,
-  'imageUrl' : string,
-  'startDate' : bigint,
-}
 export type UserId = bigint;
 export interface _CaffeineStorageCreateCertificateResult {
   'method' : string,
@@ -50,17 +40,8 @@ export interface _SERVICE {
   >,
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   'addContent' : ActorMethod<[UserId, string, string, ExternalBlob], undefined>,
-  'addEducation' : ActorMethod<[UserId, string], undefined>,
-  'addLocalAd' : ActorMethod<
-    [UserId, string, string, string, string, bigint, bigint, boolean],
-    undefined
-  >,
-  'adminAddAvatar' : ActorMethod<[UserId, string], undefined>,
   'adminAddUser' : ActorMethod<[UserId, string], undefined>,
-  'getActiveLocalAds' : ActorMethod<[], Array<LocalAd>>,
-  'getAllLocalAds' : ActorMethod<[], Array<LocalAd>>,
   'getUser' : ActorMethod<[UserId], Array<UserId>>,
-  'sendOtp' : ActorMethod<[UserId], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

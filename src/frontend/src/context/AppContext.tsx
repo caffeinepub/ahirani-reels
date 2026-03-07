@@ -93,6 +93,27 @@ export interface User {
   email?: string;
   password?: string; // plain text simulation (not for production)
   authProvider?: "phone" | "email" | "username" | "google" | "facebook";
+  artistApprovalStatus?: "pending" | "approved" | "rejected";
+  // Extended profile fields
+  fullName?: string;
+  coverPhoto?: string; // URL for cover/banner image
+  location?: string;
+  socialLinks?: {
+    whatsapp?: string;
+    instagram?: string;
+    youtube?: string;
+    facebook?: string;
+    custom?: string;
+  };
+  artistCategory?:
+    | "Singer"
+    | "Actor"
+    | "Comedian"
+    | "Creator"
+    | "Dancer"
+    | "Director";
+  contactEmail?: string;
+  portfolioLinks?: string[]; // array of external URLs
 }
 
 export interface Video {
@@ -116,6 +137,8 @@ export interface Video {
   promotedAt?: number;
   promotionExpiry?: number;
   promotionTier?: "basic" | "standard" | "premium";
+  mediaType?: "video" | "photo"; // optional; defaults to "video" for existing content
+  isFeatured?: boolean;
 }
 
 export interface Comment {
@@ -258,6 +281,31 @@ export interface Gift {
   createdAt: number;
 }
 
+// ─── Music Library Types ───────────────────────────────────────────────────────
+
+export type MusicGenre =
+  | "folk"
+  | "devotional"
+  | "dance"
+  | "romance"
+  | "comedy"
+  | "other";
+export type MusicStatus = "pending" | "approved" | "rejected";
+
+export interface MusicTrack {
+  id: string;
+  title: string;
+  artist: string;
+  genre: MusicGenre;
+  audioUrl: string;
+  duration: number; // seconds
+  status: MusicStatus;
+  uploadedBy: string; // userId, "admin" for admin uploads
+  uploadedAt: number; // unix ms
+  playCount: number;
+  coverColor?: string; // optional accent color for UI
+}
+
 export const GIFT_COSTS: Record<Gift["giftType"], number> = {
   clap: 5,
   star: 20,
@@ -305,6 +353,8 @@ export interface AppState {
   adRevenueRecords: AdRevenueRecord[];
   adminTotalEarnings: number; // accumulates 40% admin share from all ad records
   adUnitIds: AdUnitIds;
+  musicTracks: MusicTrack[];
+  subscriptionPrice: number;
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -384,7 +434,18 @@ type Action =
       viewerId: string;
       revenueAmount: number;
     }
-  | { type: "SET_AD_UNIT_IDS"; ids: AdUnitIds };
+  | { type: "SET_AD_UNIT_IDS"; ids: AdUnitIds }
+  | { type: "ADD_MUSIC_TRACK"; track: MusicTrack }
+  | { type: "APPROVE_MUSIC_TRACK"; trackId: string }
+  | { type: "REJECT_MUSIC_TRACK"; trackId: string }
+  | { type: "DELETE_MUSIC_TRACK"; trackId: string }
+  | { type: "INCREMENT_MUSIC_PLAY"; trackId: string }
+  | { type: "FEATURE_VIDEO"; videoId: string }
+  | { type: "UNFEATURE_VIDEO"; videoId: string }
+  | { type: "APPROVE_ARTIST"; userId: string }
+  | { type: "REJECT_ARTIST"; userId: string }
+  | { type: "BROADCAST_NOTIFICATION"; message: string }
+  | { type: "SET_SUBSCRIPTION_PRICE"; price: number };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -608,6 +669,9 @@ const MOCK_USERS: User[] = [
     dailyShareCount: 0,
     dailyWatchCount: 0,
     authProvider: "phone" as const,
+    fullName: "Priya Sharma",
+    artistCategory: "Dancer" as const,
+    location: "Mumbai, Maharashtra",
   },
   {
     id: "u2",
@@ -645,6 +709,9 @@ const MOCK_USERS: User[] = [
     dailyShareCount: 0,
     dailyWatchCount: 0,
     authProvider: "phone" as const,
+    fullName: "Rahul Sharma",
+    artistCategory: "Comedian" as const,
+    location: "Delhi, India",
   },
   {
     id: "u3",
@@ -951,6 +1018,139 @@ const MOCK_LOCAL_ADS: LocalAd[] = [
   },
 ];
 
+// ─── Seed Music Tracks ────────────────────────────────────────────────────────
+
+const SEED_MUSIC_TRACKS: MusicTrack[] = [
+  {
+    id: "mt1",
+    title: "मातीची गाणी",
+    artist: "रामदास माळी",
+    genre: "folk",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    duration: 180,
+    status: "approved",
+    uploadedBy: "admin",
+    uploadedAt: Date.now() - 86400000 * 30,
+    playCount: 4521,
+    coverColor: "oklch(0.65 0.18 60)",
+  },
+  {
+    id: "mt2",
+    title: "अहिराणी धमाल",
+    artist: "सुनीता पाटील",
+    genre: "dance",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    duration: 145,
+    status: "approved",
+    uploadedBy: "admin",
+    uploadedAt: Date.now() - 86400000 * 25,
+    playCount: 3892,
+    coverColor: "oklch(0.65 0.22 340)",
+  },
+  {
+    id: "mt3",
+    title: "शेतावरची गाणी",
+    artist: "भीमराव सोनार",
+    genre: "folk",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    duration: 200,
+    status: "approved",
+    uploadedBy: "admin",
+    uploadedAt: Date.now() - 86400000 * 20,
+    playCount: 2740,
+    coverColor: "oklch(0.6 0.2 140)",
+  },
+  {
+    id: "mt4",
+    title: "देवाच्या दारी",
+    artist: "गीताबाई जाधव",
+    genre: "devotional",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    duration: 165,
+    status: "approved",
+    uploadedBy: "admin",
+    uploadedAt: Date.now() - 86400000 * 18,
+    playCount: 5103,
+    coverColor: "oklch(0.65 0.2 80)",
+  },
+  {
+    id: "mt5",
+    title: "खानदेशी बाणा",
+    artist: "रमेश चव्हाण",
+    genre: "folk",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    duration: 190,
+    status: "approved",
+    uploadedBy: "admin",
+    uploadedAt: Date.now() - 86400000 * 15,
+    playCount: 3215,
+    coverColor: "oklch(0.65 0.28 15)",
+  },
+  {
+    id: "mt6",
+    title: "प्रेमाची गोष्ट",
+    artist: "सीमा देशमुख",
+    genre: "romance",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    duration: 210,
+    status: "approved",
+    uploadedBy: "admin",
+    uploadedAt: Date.now() - 86400000 * 12,
+    playCount: 6841,
+    coverColor: "oklch(0.65 0.22 350)",
+  },
+  {
+    id: "mt7",
+    title: "हसवा फसवा",
+    artist: "विजय नाईक",
+    genre: "comedy",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
+    duration: 155,
+    status: "approved",
+    uploadedBy: "admin",
+    uploadedAt: Date.now() - 86400000 * 10,
+    playCount: 2180,
+    coverColor: "oklch(0.65 0.2 50)",
+  },
+  {
+    id: "mt8",
+    title: "नाच रे मोरा",
+    artist: "आशा बोरसे",
+    genre: "dance",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
+    duration: 175,
+    status: "approved",
+    uploadedBy: "admin",
+    uploadedAt: Date.now() - 86400000 * 8,
+    playCount: 4470,
+    coverColor: "oklch(0.6 0.22 200)",
+  },
+  {
+    id: "mt9",
+    title: "माझी अहिराणी",
+    artist: "नया कलाकार",
+    genre: "folk",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    duration: 160,
+    status: "pending",
+    uploadedBy: "u2",
+    uploadedAt: Date.now() - 86400000 * 2,
+    playCount: 0,
+  },
+  {
+    id: "mt10",
+    title: "गाव माझं",
+    artist: "नवोदित गायक",
+    genre: "folk",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    duration: 170,
+    status: "pending",
+    uploadedBy: "u2",
+    uploadedAt: Date.now() - 86400000 * 1,
+    playCount: 0,
+  },
+];
+
 // ─── Seed viewer referral progress ───────────────────────────────────────────
 // u3 (neha_vlogs, viewer) was referred by u1 (priya_dance). She's verified OTP
 // and watched 2 videos so far -- reward not yet paid (needs 1 more watch).
@@ -1123,6 +1323,8 @@ function getInitialState(): AppState {
           google: { ...GOOGLE_AD_SLOTS },
           meta: { ...META_AD_SLOTS },
         },
+        musicTracks: parsed.musicTracks ?? SEED_MUSIC_TRACKS,
+        subscriptionPrice: parsed.subscriptionPrice ?? 600,
       };
     }
   } catch {
@@ -1152,6 +1354,8 @@ function getInitialState(): AppState {
       google: { ...GOOGLE_AD_SLOTS },
       meta: { ...META_AD_SLOTS },
     },
+    musicTracks: SEED_MUSIC_TRACKS,
+    subscriptionPrice: 600,
   };
 }
 
@@ -2949,6 +3153,95 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_AD_UNIT_IDS":
       return { ...state, adUnitIds: action.ids };
 
+    // ── Music Library ─────────────────────────────────────────────────────────
+
+    case "ADD_MUSIC_TRACK":
+      return { ...state, musicTracks: [...state.musicTracks, action.track] };
+
+    case "APPROVE_MUSIC_TRACK":
+      return {
+        ...state,
+        musicTracks: state.musicTracks.map((t) =>
+          t.id === action.trackId ? { ...t, status: "approved" } : t,
+        ),
+      };
+
+    case "REJECT_MUSIC_TRACK":
+      return {
+        ...state,
+        musicTracks: state.musicTracks.map((t) =>
+          t.id === action.trackId ? { ...t, status: "rejected" } : t,
+        ),
+      };
+
+    case "DELETE_MUSIC_TRACK":
+      return {
+        ...state,
+        musicTracks: state.musicTracks.filter((t) => t.id !== action.trackId),
+      };
+
+    case "INCREMENT_MUSIC_PLAY":
+      return {
+        ...state,
+        musicTracks: state.musicTracks.map((t) =>
+          t.id === action.trackId ? { ...t, playCount: t.playCount + 1 } : t,
+        ),
+      };
+
+    case "FEATURE_VIDEO":
+      return {
+        ...state,
+        videos: state.videos.map((v) =>
+          v.id === action.videoId ? { ...v, isFeatured: true } : v,
+        ),
+      };
+
+    case "UNFEATURE_VIDEO":
+      return {
+        ...state,
+        videos: state.videos.map((v) =>
+          v.id === action.videoId ? { ...v, isFeatured: false } : v,
+        ),
+      };
+
+    case "APPROVE_ARTIST":
+      return {
+        ...state,
+        users: state.users.map((u) =>
+          u.id === action.userId
+            ? { ...u, artistApprovalStatus: "approved" as const }
+            : u,
+        ),
+      };
+
+    case "REJECT_ARTIST":
+      return {
+        ...state,
+        users: state.users.map((u) =>
+          u.id === action.userId
+            ? { ...u, artistApprovalStatus: "rejected" as const }
+            : u,
+        ),
+      };
+
+    case "BROADCAST_NOTIFICATION": {
+      const broadcastNotifs: Notification[] = state.users.map((u) => ({
+        id: `notif_broadcast_${Date.now()}_${u.id}`,
+        userId: u.id,
+        type: "follow" as const,
+        message: action.message,
+        createdAt: Date.now(),
+        isRead: false,
+      }));
+      return {
+        ...state,
+        notifications: [...state.notifications, ...broadcastNotifs],
+      };
+    }
+
+    case "SET_SUBSCRIPTION_PRICE":
+      return { ...state, subscriptionPrice: action.price };
+
     default:
       return state;
   }
@@ -3006,7 +3299,10 @@ function AppProviderInner({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         // sendOtp with userId 0n as a lightweight connectivity ping
-        await actor.sendOtp(BigInt(0));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (
+          actor as unknown as { sendOtp: (n: bigint) => Promise<unknown> }
+        ).sendOtp(BigInt(0));
         if (!cancelled) {
           setIsBackendConnected(true);
           toast.success("Connected to ICP", {

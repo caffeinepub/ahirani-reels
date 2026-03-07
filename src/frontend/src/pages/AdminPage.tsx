@@ -11,8 +11,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Banknote,
+  Camera,
   CheckCircle,
   Clapperboard,
   Crown,
@@ -20,14 +22,18 @@ import {
   Film,
   Hash,
   Heart,
+  ImageIcon,
   IndianRupee,
+  Library,
   Link,
   LogOut,
   Megaphone,
+  Music,
   Pause,
   Play,
   Settings,
   Shield,
+  Star,
   Trash2,
   TrendingUp,
   Upload,
@@ -38,7 +44,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import CreatorBadge from "../components/CreatorBadge";
 import { LOCAL_AD_RATE_PER_DAY } from "../components/ads/ads-config";
@@ -46,6 +52,8 @@ import type {
   AdRpmConfig,
   AdUnitIds,
   LocalAd,
+  MusicGenre,
+  MusicTrack,
   SubscriptionStatus,
   UserRole,
   VideoType,
@@ -54,9 +62,63 @@ import type {
 import { computeVideoEarnings, useApp } from "../context/AppContext";
 import { formatCount, formatTime, generateId } from "../utils/trending";
 
-const ADMIN_EMAIL = "admin@ahiranireels.com";
-const ADMIN_PASSWORD = "ssm";
-const ADMIN_NAME = "Samadhan Mali";
+const ADMIN_NAME = "समाधान माळी";
+
+// ─── Admin Photo Upload Button ────────────────────────────────────────────────
+
+function AdminPhotoUploadButton({
+  navigate,
+}: {
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    navigate({
+      to: "/edit-photo",
+      state: { photoFile: file, fromAdmin: true } as never,
+    });
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        data-ocid="admin.upload_photo_button"
+        onClick={() => photoInputRef.current?.click()}
+        className="w-full flex items-center gap-3 rounded-xl px-4 py-3.5 border border-white/20 bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all text-left"
+      >
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+          style={{
+            background: "oklch(0.55 0.22 150 / 0.25)",
+            border: "1px solid oklch(0.55 0.22 150 / 0.4)",
+          }}
+        >
+          <ImageIcon
+            className="w-5 h-5"
+            style={{ color: "oklch(0.7 0.2 150)" }}
+          />
+        </div>
+        <div>
+          <p className="text-white font-semibold text-sm">Upload Photo</p>
+          <p className="text-white/40 text-xs mt-0.5">
+            Select a photo from device and post
+          </p>
+        </div>
+      </button>
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePhotoChange}
+      />
+    </>
+  );
+}
 
 // ─── Reason Badge ─────────────────────────────────────────────────────────────
 
@@ -201,100 +263,6 @@ function WithdrawalStatusBadge({
   );
 }
 
-// ─── Admin Login ──────────────────────────────────────────────────────────────
-
-function AdminLogin({ onLogin }: { onLogin: () => void }) {
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleLogin = async () => {
-    setError("");
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    if (email.trim().toLowerCase() === ADMIN_EMAIL && pass === ADMIN_PASSWORD) {
-      onLogin();
-      toast.success(`Welcome, ${ADMIN_NAME}!`);
-    } else {
-      setError("Invalid email or password");
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div
-      className="min-h-dvh flex flex-col items-center justify-center px-6"
-      style={{
-        background:
-          "radial-gradient(ellipse at top, oklch(0.1 0.02 260) 0%, oklch(0 0 0) 60%)",
-      }}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm"
-      >
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center mb-4">
-            <Shield className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="font-display text-2xl font-bold text-white">
-            Admin Panel
-          </h1>
-          <p className="text-white/50 text-sm mt-1">Restricted Access</p>
-        </div>
-
-        <div className="space-y-4">
-          <Input
-            data-ocid="admin.email_input"
-            type="email"
-            placeholder="Admin Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-12"
-          />
-          <Input
-            data-ocid="admin.password_input"
-            type="password"
-            placeholder="Password"
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-12"
-          />
-
-          {error && (
-            <p
-              data-ocid="admin.login_error"
-              className="text-red-400 text-sm text-center"
-            >
-              {error}
-            </p>
-          )}
-
-          <Button
-            data-ocid="admin.login_button"
-            onClick={handleLogin}
-            disabled={loading}
-            className="w-full h-12 font-semibold text-base bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Logging in...
-              </span>
-            ) : (
-              "Login to Dashboard"
-            )}
-          </Button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
 // ─── Admin Dashboard ──────────────────────────────────────────────────────────
 
 // ─── Admin Video Type Chip Config ──────────────────────────────────────────────
@@ -311,17 +279,21 @@ const ADMIN_VIDEO_TYPES: Array<{
 
 function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { state, dispatch } = useApp();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
     | "overview"
     | "users"
+    | "artists"
     | "videos"
     | "comments"
     | "withdrawals"
     | "upload"
     | "ads"
+    | "music"
     | "reports"
     | "security"
     | "live"
+    | "settings"
   >("overview");
 
   // Admin upload form state
@@ -490,17 +462,35 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
   const pendingReports = state.reports ?? [];
 
+  // Music Library form state
+  const [musicForm, setMusicForm] = useState({
+    title: "",
+    artist: "",
+    genre: "folk" as MusicGenre,
+    audioUrl: "",
+    duration: 180,
+  });
+
+  // Settings tab local state
+  const [subPriceDraft, setSubPriceDraft] = useState(
+    state.subscriptionPrice ?? 600,
+  );
+  const [broadcastMsg, setBroadcastMsg] = useState("");
+
   const tabs = [
     "overview",
     "users",
+    "artists",
     "videos",
     "comments",
     "withdrawals",
     "upload",
     "ads",
+    "music",
     "live",
     "reports",
     "security",
+    "settings",
   ] as const;
 
   return (
@@ -544,6 +534,21 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             }`}
           >
             {tab}
+            {tab === "artists" &&
+              state.users.filter(
+                (u) =>
+                  u.role === "artist" && u.artistApprovalStatus === "pending",
+              ).length > 0 && (
+                <span className="ml-1.5 bg-amber-500 text-black text-[10px] font-bold rounded-full px-1.5 py-0.5">
+                  {
+                    state.users.filter(
+                      (u) =>
+                        u.role === "artist" &&
+                        u.artistApprovalStatus === "pending",
+                    ).length
+                  }
+                </span>
+              )}
             {tab === "withdrawals" && pendingWithdrawals.length > 0 && (
               <span className="ml-1.5 bg-amber-500 text-black text-[10px] font-bold rounded-full px-1.5 py-0.5">
                 {pendingWithdrawals.length}
@@ -1656,6 +1661,41 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                                   Approve
                                 </Button>
                               )}
+                              {video.isFeatured ? (
+                                <Button
+                                  data-ocid={`admin.unfeature_button.${ocidIndex}`}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    dispatch({
+                                      type: "UNFEATURE_VIDEO",
+                                      videoId: video.id,
+                                    });
+                                    toast.success("Removed from featured");
+                                  }}
+                                  className="text-amber-400 hover:text-amber-300 hover:bg-amber-400/10 text-xs h-7 px-2"
+                                >
+                                  <Star className="w-3 h-3 mr-1 fill-amber-400" />
+                                  Featured
+                                </Button>
+                              ) : (
+                                <Button
+                                  data-ocid={`admin.feature_button.${ocidIndex}`}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    dispatch({
+                                      type: "FEATURE_VIDEO",
+                                      videoId: video.id,
+                                    });
+                                    toast.success("Video featured!");
+                                  }}
+                                  className="text-white/40 hover:text-amber-400 hover:bg-amber-400/10 text-xs h-7 px-2"
+                                >
+                                  <Star className="w-3 h-3 mr-1" />
+                                  Feature
+                                </Button>
+                              )}
                               <Button
                                 data-ocid={`admin.delete_button.${ocidIndex}`}
                                 size="sm"
@@ -1959,6 +1999,46 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             <h2 className="text-white/60 text-sm font-medium uppercase tracking-wider">
               Admin Upload
             </h2>
+
+            {/* Camera Record option */}
+            <button
+              type="button"
+              data-ocid="admin.upload_camera_button"
+              onClick={() =>
+                navigate({ to: "/camera", search: { from: "admin" } })
+              }
+              className="w-full flex items-center gap-3 rounded-xl px-4 py-3.5 border border-white/20 bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all text-left"
+            >
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                style={{
+                  background: "oklch(0.65 0.28 15 / 0.25)",
+                  border: "1px solid oklch(0.65 0.28 15 / 0.4)",
+                }}
+              >
+                <Camera
+                  className="w-5 h-5"
+                  style={{ color: "oklch(0.75 0.22 15)" }}
+                />
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm">
+                  Record with Camera
+                </p>
+                <p className="text-white/40 text-xs mt-0.5">
+                  Open in-app camera to record a reel directly
+                </p>
+              </div>
+            </button>
+
+            {/* Photo Upload option */}
+            <AdminPhotoUploadButton navigate={navigate} />
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="text-white/30 text-xs">or paste a URL</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
 
             {/* Video URL */}
             <div className="space-y-2">
@@ -3169,6 +3249,381 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             )}
           </div>
         )}
+        {/* Music Library tab */}
+        {activeTab === "music" && (
+          <div className="space-y-5" data-ocid="admin.music.panel">
+            <h2 className="text-white/60 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+              <Library className="w-4 h-4" />
+              Music Library Management
+            </h2>
+
+            {/* Add New Track */}
+            <div className="rounded-2xl border border-white/10 bg-white/3 overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+                <Music
+                  className="w-4 h-4 text-[oklch(0.65_0.28_15)]"
+                  style={{ color: "oklch(0.65 0.28 15)" }}
+                />
+                <h3 className="text-white font-semibold text-sm">
+                  Add New Track
+                </h3>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-white/50 text-xs font-medium">
+                      Song Title
+                    </span>
+                    <Input
+                      data-ocid="admin.music_title.input"
+                      value={musicForm.title}
+                      onChange={(e) =>
+                        setMusicForm((f) => ({ ...f, title: e.target.value }))
+                      }
+                      placeholder="e.g. मातीची गाणी"
+                      className="bg-white/8 border-white/15 text-white text-sm placeholder:text-white/30 h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-white/50 text-xs font-medium">
+                      Artist Name
+                    </span>
+                    <Input
+                      data-ocid="admin.music_artist.input"
+                      value={musicForm.artist}
+                      onChange={(e) =>
+                        setMusicForm((f) => ({ ...f, artist: e.target.value }))
+                      }
+                      placeholder="e.g. रामदास माळी"
+                      className="bg-white/8 border-white/15 text-white text-sm placeholder:text-white/30 h-9"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-white/50 text-xs font-medium">
+                      Genre
+                    </span>
+                    <select
+                      data-ocid="admin.music_genre.select"
+                      value={musicForm.genre}
+                      onChange={(e) =>
+                        setMusicForm((f) => ({
+                          ...f,
+                          genre: e.target.value as MusicGenre,
+                        }))
+                      }
+                      className="w-full h-9 rounded-md bg-white/8 border border-white/15 text-white text-sm px-3 outline-none focus:border-white/30"
+                    >
+                      <option value="folk">Folk</option>
+                      <option value="dance">Dance</option>
+                      <option value="devotional">Devotional</option>
+                      <option value="romance">Romance</option>
+                      <option value="comedy">Comedy</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-white/50 text-xs font-medium">
+                      Duration (seconds)
+                    </span>
+                    <Input
+                      data-ocid="admin.music_duration.input"
+                      type="number"
+                      value={musicForm.duration}
+                      onChange={(e) =>
+                        setMusicForm((f) => ({
+                          ...f,
+                          duration: Number(e.target.value),
+                        }))
+                      }
+                      min={10}
+                      max={600}
+                      className="bg-white/8 border-white/15 text-white text-sm h-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-white/50 text-xs font-medium">
+                    Audio URL
+                  </span>
+                  <Input
+                    data-ocid="admin.music_url.input"
+                    value={musicForm.audioUrl}
+                    onChange={(e) =>
+                      setMusicForm((f) => ({ ...f, audioUrl: e.target.value }))
+                    }
+                    placeholder="https://example.com/audio.mp3"
+                    className="bg-white/8 border-white/15 text-white text-sm placeholder:text-white/30 h-9"
+                  />
+                </div>
+                <Button
+                  data-ocid="admin.music_add.button"
+                  onClick={() => {
+                    if (
+                      !musicForm.title.trim() ||
+                      !musicForm.artist.trim() ||
+                      !musicForm.audioUrl.trim()
+                    ) {
+                      toast.error("Fill in title, artist, and audio URL");
+                      return;
+                    }
+                    const newTrack: MusicTrack = {
+                      id: `mt_${Date.now()}`,
+                      title: musicForm.title.trim(),
+                      artist: musicForm.artist.trim(),
+                      genre: musicForm.genre,
+                      audioUrl: musicForm.audioUrl.trim(),
+                      duration: musicForm.duration,
+                      status: "approved",
+                      uploadedBy: "admin",
+                      uploadedAt: Date.now(),
+                      playCount: 0,
+                    };
+                    dispatch({ type: "ADD_MUSIC_TRACK", track: newTrack });
+                    setMusicForm({
+                      title: "",
+                      artist: "",
+                      genre: "folk",
+                      audioUrl: "",
+                      duration: 180,
+                    });
+                    toast.success(`"${newTrack.title}" added to library!`);
+                  }}
+                  className="w-full h-10 font-semibold text-white"
+                  style={{ background: "oklch(0.65 0.28 15)" }}
+                >
+                  + Add Track to Library
+                </Button>
+              </div>
+            </div>
+
+            {/* Pending Approval */}
+            {(() => {
+              const pendingTracks = state.musicTracks.filter(
+                (t) => t.status === "pending",
+              );
+              return pendingTracks.length > 0 ? (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-amber-500/20 flex items-center justify-between">
+                    <h3 className="text-amber-400 font-semibold text-sm">
+                      Pending Approval
+                    </h3>
+                    <span className="bg-amber-500 text-black text-[10px] font-bold rounded-full px-2 py-0.5">
+                      {pendingTracks.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-white/5">
+                    {pendingTracks.map((track, i) => {
+                      const idx = i + 1;
+                      return (
+                        <div
+                          key={track.id}
+                          data-ocid={`admin.music.item.${idx}`}
+                          className="px-4 py-3 flex items-center gap-3"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-semibold truncate">
+                              {track.title}
+                            </p>
+                            <p className="text-white/40 text-xs">
+                              {track.artist} · {track.genre} · by @
+                              {track.uploadedBy}
+                            </p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <Button
+                              data-ocid={`admin.music_approve.button.${idx}`}
+                              size="sm"
+                              onClick={() => {
+                                dispatch({
+                                  type: "APPROVE_MUSIC_TRACK",
+                                  trackId: track.id,
+                                });
+                                toast.success(`"${track.title}" approved!`);
+                              }}
+                              className="h-7 px-3 text-xs bg-green-600/30 hover:bg-green-600/50 text-green-300 border border-green-500/30"
+                            >
+                              ✓ Approve
+                            </Button>
+                            <Button
+                              data-ocid={`admin.music_reject.button.${idx}`}
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                dispatch({
+                                  type: "REJECT_MUSIC_TRACK",
+                                  trackId: track.id,
+                                });
+                                toast.success(`"${track.title}" rejected`);
+                              }}
+                              className="h-7 px-3 text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 border border-red-500/20"
+                            >
+                              ✕ Reject
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            {/* Approved Tracks */}
+            {(() => {
+              const approvedTracks = state.musicTracks.filter(
+                (t) => t.status === "approved",
+              );
+              return (
+                <div className="rounded-2xl border border-white/10 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                    <h3 className="text-white font-semibold text-sm">
+                      Approved Tracks
+                    </h3>
+                    <span className="text-white/40 text-xs">
+                      {approvedTracks.length} tracks
+                    </span>
+                  </div>
+                  {approvedTracks.length === 0 ? (
+                    <div
+                      data-ocid="admin.music.empty_state"
+                      className="text-center py-8 text-white/30 text-sm"
+                    >
+                      No approved tracks yet.
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-white/10 hover:bg-transparent">
+                          <TableHead className="text-white/60 text-xs">
+                            Title
+                          </TableHead>
+                          <TableHead className="text-white/60 text-xs">
+                            Artist
+                          </TableHead>
+                          <TableHead className="text-white/60 text-xs">
+                            Genre
+                          </TableHead>
+                          <TableHead className="text-white/60 text-xs">
+                            Plays
+                          </TableHead>
+                          <TableHead className="text-white/60 text-right text-xs">
+                            Delete
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {approvedTracks.map((track, i) => {
+                          const idx = i + 1;
+                          return (
+                            <TableRow
+                              key={track.id}
+                              data-ocid={`admin.music.approved.item.${idx}`}
+                              className="border-white/5 hover:bg-white/5"
+                            >
+                              <TableCell>
+                                <p className="text-white text-xs font-medium truncate max-w-[100px]">
+                                  {track.title}
+                                </p>
+                              </TableCell>
+                              <TableCell className="text-white/60 text-xs truncate max-w-[80px]">
+                                {track.artist}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] bg-white/8 text-white/50 border-white/10 capitalize"
+                                >
+                                  {track.genre}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-white/50 text-xs">
+                                {track.playCount.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  data-ocid={`admin.music_delete.button.${idx}`}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    dispatch({
+                                      type: "DELETE_MUSIC_TRACK",
+                                      trackId: track.id,
+                                    });
+                                    toast.success(`"${track.title}" deleted`);
+                                  }}
+                                  className="h-7 w-7 p-0 text-red-400/60 hover:text-red-400 hover:bg-red-400/10"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Rejected Tracks */}
+            {(() => {
+              const rejectedTracks = state.musicTracks.filter(
+                (t) => t.status === "rejected",
+              );
+              return rejectedTracks.length > 0 ? (
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/3 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-red-500/15 flex items-center justify-between">
+                    <h3 className="text-red-400/80 font-semibold text-sm">
+                      Rejected Tracks
+                    </h3>
+                    <span className="text-red-400/50 text-xs">
+                      {rejectedTracks.length} tracks
+                    </span>
+                  </div>
+                  <div className="divide-y divide-white/5">
+                    {rejectedTracks.map((track, i) => {
+                      const idx = i + 1;
+                      return (
+                        <div
+                          key={track.id}
+                          className="px-4 py-2.5 flex items-center gap-3"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white/50 text-sm truncate">
+                              {track.title}
+                            </p>
+                            <p className="text-white/25 text-xs">
+                              {track.artist}
+                            </p>
+                          </div>
+                          <Button
+                            data-ocid={`admin.music_rejected_delete.button.${idx}`}
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              dispatch({
+                                type: "DELETE_MUSIC_TRACK",
+                                trackId: track.id,
+                              });
+                              toast.success("Track removed");
+                            }}
+                            className="h-7 w-7 p-0 text-white/20 hover:text-red-400 hover:bg-red-400/10"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+          </div>
+        )}
+
         {/* Live Streams tab */}
         {activeTab === "live" && (
           <div className="space-y-4" data-ocid="admin.live.panel">
@@ -3301,6 +3756,367 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             )}
           </div>
         )}
+        {/* Artists tab */}
+        {activeTab === "artists" && (
+          <div className="space-y-4">
+            <h2 className="text-white/60 text-sm font-medium uppercase tracking-wider">
+              Artist Management (
+              {state.users.filter((u) => u.role === "artist").length} artists)
+            </h2>
+            <div className="rounded-2xl border border-white/10 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableHead className="text-white/60">Artist</TableHead>
+                    <TableHead className="text-white/60">
+                      Subscription
+                    </TableHead>
+                    <TableHead className="text-white/60">Approval</TableHead>
+                    <TableHead className="text-white/60">Stats</TableHead>
+                    <TableHead className="text-white/60 text-right">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {state.users
+                    .filter((u) => u.role === "artist")
+                    .map((artist, i) => {
+                      const ocidIndex = i + 1;
+                      const approvalStatus =
+                        artist.artistApprovalStatus ?? "approved";
+                      const artistVideoCount = state.videos.filter(
+                        (v) => v.uploaderId === artist.id && !v.isDeleted,
+                      ).length;
+                      return (
+                        <TableRow
+                          key={artist.id}
+                          data-ocid={`admin.artists.item.${ocidIndex}`}
+                          className="border-white/5 hover:bg-white/5"
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="w-7 h-7">
+                                <AvatarImage src={artist.avatar} />
+                                <AvatarFallback className="bg-white/10 text-white text-xs">
+                                  {artist.username[0].toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="text-white text-sm font-medium">
+                                  @{artist.username}
+                                </p>
+                                <p className="text-white/30 text-[10px] truncate max-w-[100px]">
+                                  {artist.bio || "No bio"}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1.5">
+                              <AdminSubBadge
+                                status={artist.subscriptionStatus ?? "none"}
+                              />
+                              <Button
+                                data-ocid={`admin.artists.grant_sub_button.${ocidIndex}`}
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  dispatch({
+                                    type: "SET_SUBSCRIPTION",
+                                    userId: artist.id,
+                                    status: "active",
+                                    expiry: Date.now() + 86400000 * 30,
+                                  });
+                                  toast.success(
+                                    `30-day subscription granted to @${artist.username}`,
+                                  );
+                                }}
+                                className="text-green-400 hover:text-green-300 hover:bg-green-400/10 text-[10px] h-6 px-2"
+                              >
+                                Grant 30d
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={`text-[10px] px-1.5 py-0 ${
+                                approvalStatus === "approved"
+                                  ? "bg-green-500/20 text-green-400 border-green-500/30"
+                                  : approvalStatus === "rejected"
+                                    ? "bg-red-500/20 text-red-400 border-red-500/30"
+                                    : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                              }`}
+                            >
+                              {approvalStatus === "approved"
+                                ? "Approved"
+                                : approvalStatus === "rejected"
+                                  ? "Rejected"
+                                  : "Pending Approval"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-white/50 text-xs">
+                                👥 {formatCount(artist.followers)}
+                              </span>
+                              <span className="text-white/40 text-xs">
+                                🎬 {artistVideoCount} videos
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              {approvalStatus !== "approved" && (
+                                <Button
+                                  data-ocid={`admin.artists.approve_button.${ocidIndex}`}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    dispatch({
+                                      type: "APPROVE_ARTIST",
+                                      userId: artist.id,
+                                    });
+                                    toast.success(
+                                      `@${artist.username} approved`,
+                                    );
+                                  }}
+                                  className="text-green-400 hover:text-green-300 hover:bg-green-400/10 text-xs h-7 px-2"
+                                >
+                                  <UserCheck className="w-3.5 h-3.5 mr-1" />
+                                  Approve
+                                </Button>
+                              )}
+                              {approvalStatus !== "rejected" && (
+                                <Button
+                                  data-ocid={`admin.artists.reject_button.${ocidIndex}`}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    dispatch({
+                                      type: "REJECT_ARTIST",
+                                      userId: artist.id,
+                                    });
+                                    toast.success(
+                                      `@${artist.username} rejected`,
+                                    );
+                                  }}
+                                  className="text-red-400 hover:text-red-300 hover:bg-red-400/10 text-xs h-7 px-2"
+                                >
+                                  <UserX className="w-3.5 h-3.5 mr-1" />
+                                  Reject
+                                </Button>
+                              )}
+                              {artist.isBlocked ? (
+                                <Button
+                                  data-ocid={`admin.artists.unblock_button.${ocidIndex}`}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    dispatch({
+                                      type: "UNBLOCK_USER",
+                                      userId: artist.id,
+                                    });
+                                    toast.success(
+                                      `@${artist.username} unblocked`,
+                                    );
+                                  }}
+                                  className="text-green-400 hover:text-green-300 hover:bg-green-400/10 text-xs h-7 px-2"
+                                >
+                                  Unblock
+                                </Button>
+                              ) : (
+                                <Button
+                                  data-ocid={`admin.artists.block_button.${ocidIndex}`}
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    dispatch({
+                                      type: "BLOCK_USER",
+                                      userId: artist.id,
+                                    });
+                                    toast.success(
+                                      `@${artist.username} blocked`,
+                                    );
+                                  }}
+                                  className="text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 text-xs h-7 px-2"
+                                >
+                                  Block
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  {state.users.filter((u) => u.role === "artist").length ===
+                    0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        data-ocid="admin.artists.empty_state"
+                        className="text-center py-8 text-white/30 text-sm"
+                      >
+                        No artists yet
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
+        {/* Settings tab */}
+        {activeTab === "settings" && (
+          <div className="space-y-6 max-w-lg">
+            <h2 className="text-white/60 text-sm font-medium uppercase tracking-wider">
+              Admin Settings
+            </h2>
+
+            {/* Subscription Price Card */}
+            <div className="rounded-2xl border border-white/10 bg-card p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <IndianRupee className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-white font-semibold">Subscription Price</h3>
+              </div>
+              <p className="text-white/50 text-sm">
+                Artist annual subscription price. Changes reflect on
+                registration and subscription pages instantly.
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm font-bold">
+                    ₹
+                  </span>
+                  <input
+                    data-ocid="admin.settings.price_input"
+                    type="number"
+                    min={100}
+                    step={50}
+                    value={subPriceDraft}
+                    onChange={(e) =>
+                      setSubPriceDraft(Number(e.target.value) || 600)
+                    }
+                    className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white h-11 text-sm outline-none focus:border-emerald-500/60 transition-colors"
+                  />
+                </div>
+                <span className="text-white/40 text-sm">/ year</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-white/40 text-xs">
+                  Current: ₹{state.subscriptionPrice ?? 600}
+                </span>
+                <Button
+                  data-ocid="admin.settings.save_price_button"
+                  size="sm"
+                  onClick={() => {
+                    if (subPriceDraft < 100) {
+                      toast.error("Minimum price is ₹100");
+                      return;
+                    }
+                    dispatch({
+                      type: "SET_SUBSCRIPTION_PRICE",
+                      price: subPriceDraft,
+                    });
+                    toast.success(
+                      `Subscription price updated to ₹${subPriceDraft}`,
+                    );
+                  }}
+                  className="ml-auto font-semibold"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.5 0.18 160), oklch(0.45 0.2 140))",
+                  }}
+                >
+                  Save Price
+                </Button>
+              </div>
+            </div>
+
+            {/* Broadcast Notification Card */}
+            <div className="rounded-2xl border border-white/10 bg-card p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-blue-400" />
+                <h3 className="text-white font-semibold">
+                  Broadcast Notification
+                </h3>
+              </div>
+              <p className="text-white/50 text-sm">
+                Send a notification to ALL users on the platform. It will appear
+                in their notification bell.
+              </p>
+              <textarea
+                data-ocid="admin.settings.broadcast_textarea"
+                placeholder="Type your broadcast message..."
+                value={broadcastMsg}
+                onChange={(e) => setBroadcastMsg(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 p-3 text-sm outline-none focus:border-blue-500/60 transition-colors resize-none"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-white/30 text-xs">
+                  Will be sent to {state.users.length} users
+                </span>
+                <Button
+                  data-ocid="admin.settings.broadcast_button"
+                  size="sm"
+                  onClick={() => {
+                    if (!broadcastMsg.trim()) {
+                      toast.error("Please enter a message");
+                      return;
+                    }
+                    dispatch({
+                      type: "BROADCAST_NOTIFICATION",
+                      message: broadcastMsg.trim(),
+                    });
+                    setBroadcastMsg("");
+                    toast.success(
+                      `Broadcast sent to ${state.users.length} users!`,
+                    );
+                  }}
+                  className="font-semibold"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.5 0.2 260), oklch(0.45 0.22 280))",
+                  }}
+                >
+                  <Megaphone className="w-3.5 h-3.5 mr-1.5" />
+                  Send Broadcast
+                </Button>
+              </div>
+            </div>
+
+            {/* Extra stat cards for overview */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-gradient-to-br from-pink-600/20 to-pink-600/5 border border-white/10 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clapperboard className="w-5 h-5 text-reels-pink" />
+                </div>
+                <p className="font-bold text-2xl font-display text-reels-pink">
+                  {state.users.filter((u) => u.role === "artist").length}
+                </p>
+                <p className="text-white/50 text-xs mt-1">Total Artists</p>
+              </div>
+              <div className="rounded-2xl bg-gradient-to-br from-amber-600/20 to-amber-600/5 border border-white/10 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-5 h-5 text-amber-400" />
+                </div>
+                <p className="font-bold text-2xl font-display text-amber-400">
+                  {
+                    state.users.filter(
+                      (u) =>
+                        u.role === "artist" &&
+                        u.artistApprovalStatus === "pending",
+                    ).length
+                  }
+                </p>
+                <p className="text-white/50 text-xs mt-1">Pending Approvals</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -3309,23 +4125,20 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 // ─── Admin Page ───────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const [loggedIn, setLoggedIn] = useState(() => {
-    return sessionStorage.getItem("ahirani_admin") === "1";
-  });
+  const navigate = useNavigate();
 
-  const handleLogin = () => {
-    sessionStorage.setItem("ahirani_admin", "1");
-    setLoggedIn(true);
-  };
+  useEffect(() => {
+    if (!sessionStorage.getItem("adminAuthed")) {
+      navigate({ to: "/admin-login" });
+    }
+  }, [navigate]);
 
   const handleLogout = () => {
-    sessionStorage.removeItem("ahirani_admin");
-    setLoggedIn(false);
+    sessionStorage.removeItem("adminAuthed");
+    navigate({ to: "/admin-login" });
   };
 
-  return loggedIn ? (
-    <AdminDashboard onLogout={handleLogout} />
-  ) : (
-    <AdminLogin onLogin={handleLogin} />
-  );
+  if (!sessionStorage.getItem("adminAuthed")) return null;
+
+  return <AdminDashboard onLogout={handleLogout} />;
 }
