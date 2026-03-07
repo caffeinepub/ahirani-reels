@@ -1,15 +1,6 @@
 import type { Video } from "../context/AppContext";
 
-/**
- * Trending algorithm:
- * - Videos never seen get higher scores
- * - Recency + engagement (likes * 1.5 + comments * 2)
- * - New creator boost (random boost for uploaders with < 10 videos)
- * - Following boost: +30 if uploader is in followingIds
- * - Affinity boost: +15 per liked video from same uploader (capped at +60)
- * - Share boost: shareCount * 5
- * - Seen videos go to end
- */
+/** Upgraded trending score with recency decay, better weights */
 export function trendScore(
   video: Video,
   seenIds: string[],
@@ -18,24 +9,35 @@ export function trendScore(
   followingIds: string[] = [],
   allVideos: Video[] = [],
 ): number {
-  if (seenIds.includes(video.id)) return -1; // Seen → goes to end
+  if (seenIds.includes(video.id)) return -1;
 
   const hoursSince = (Date.now() - video.createdAt) / 3600000;
-  const recency = Math.max(0, 1000 - hoursSince);
-  const engagement = video.likesCount * 1.5 + video.commentsCount * 2.0;
-  const newCreatorBoost = uploaderVideoCount < 10 ? Math.random() * 20 : 0;
-
-  // Following boost
+  // Recency decay: max 200 for brand new, decays over 48h
+  const recency = Math.max(0, 200 - (hoursSince / 48) * 200);
+  // Better engagement weights
+  const engagement =
+    video.likesCount * 2.0 +
+    video.commentsCount * 3.0 +
+    video.viewsCount * 0.2 +
+    (video.shareCount ?? 0) * 8;
+  // New creator boost (< 5 videos: strong random boost for visibility)
+  const newCreatorBoost =
+    uploaderVideoCount < 5
+      ? Math.random() * 40
+      : uploaderVideoCount < 10
+        ? Math.random() * 20
+        : 0;
   const followBoost = followingIds.includes(video.uploaderId) ? 30 : 0;
-
-  // Affinity boost: liked videos from same uploader
   const likedFromSameUploader = allVideos.filter(
     (v) => v.uploaderId === video.uploaderId && likedVideoIds.includes(v.id),
   ).length;
   const affinityBoost = Math.min(likedFromSameUploader * 15, 60);
-
-  // Share boost
-  const shareBoost = (video.shareCount ?? 0) * 5;
+  const promotionBoost =
+    video.isPromoted &&
+    video.promotionExpiry &&
+    video.promotionExpiry > Date.now()
+      ? 500
+      : 0;
 
   return (
     recency +
@@ -43,7 +45,7 @@ export function trendScore(
     newCreatorBoost +
     followBoost +
     affinityBoost +
-    shareBoost
+    promotionBoost
   );
 }
 
@@ -54,14 +56,10 @@ export function getTrendingFeed(
   followingIds: string[] = [],
 ): Video[] {
   const activeVideos = videos.filter((v) => !v.isDeleted);
-
-  // Count videos per uploader
   const uploaderCount: Record<string, number> = {};
   for (const v of activeVideos) {
     uploaderCount[v.uploaderId] = (uploaderCount[v.uploaderId] ?? 0) + 1;
   }
-
-  // Score each video
   const scored = activeVideos.map((v) => ({
     video: v,
     score: trendScore(
@@ -73,17 +71,167 @@ export function getTrendingFeed(
       activeVideos,
     ),
   }));
-
-  // Sort: unseen by score desc, then seen appended at end
   const unseen = scored
     .filter((s) => s.score >= 0)
     .sort((a, b) => b.score - a.score);
-
   const seen = scored
     .filter((s) => s.score < 0)
     .sort((a, b) => b.video.createdAt - a.video.createdAt);
 
-  return [...unseen, ...seen].map((s) => s.video);
+  // Inject new-creator videos every 5th slot
+  const mainFeed = unseen.map((s) => s.video);
+  const newCreatorVideos = activeVideos.filter(
+    (v) => (uploaderCount[v.uploaderId] ?? 0) < 5 && !seenIds.includes(v.id),
+  );
+  if (newCreatorVideos.length > 0) {
+    let ncIdx = 0;
+    for (let i = 4; i < mainFeed.length; i += 5) {
+      const nc = newCreatorVideos[ncIdx % newCreatorVideos.length];
+      // Only inject if not already in that position
+      if (mainFeed[i]?.id !== nc.id) {
+        mainFeed.splice(i, 0, nc);
+        // Remove duplicate if exists elsewhere
+        const dupIdx = mainFeed.findIndex(
+          (v, idx) => v.id === nc.id && idx !== i,
+        );
+        if (dupIdx !== -1) mainFeed.splice(dupIdx, 1);
+      }
+      ncIdx++;
+    }
+  }
+
+  return [...mainFeed, ...seen.map((s) => s.video)];
+}
+
+/**
+ * Get trending feed (pure engagement score, no seen-filter), used for Trending tab.
+ * Injects new-creator every 5th slot.
+ */
+export function getTrendingTabFeed(videos: Video[]): Video[] {
+  const activeVideos = videos.filter((v) => !v.isDeleted);
+  const uploaderCount: Record<string, number> = {};
+  for (const v of activeVideos) {
+    uploaderCount[v.uploaderId] = (uploaderCount[v.uploaderId] ?? 0) + 1;
+  }
+
+  const scored = activeVideos
+    .map((v) => {
+      const hoursSince = (Date.now() - v.createdAt) / 3600000;
+      const recency = Math.max(0, 200 - (hoursSince / 48) * 200);
+      const engagement =
+        v.likesCount * 2.0 +
+        v.commentsCount * 3.0 +
+        v.viewsCount * 0.2 +
+        (v.shareCount ?? 0) * 8;
+      const promotionBoost =
+        v.isPromoted && v.promotionExpiry && v.promotionExpiry > Date.now()
+          ? 500
+          : 0;
+      return { video: v, score: recency + engagement + promotionBoost };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((s) => s.video);
+
+  // Inject new-creator every 5th slot
+  const newCreatorVideos = activeVideos.filter(
+    (v) => (uploaderCount[v.uploaderId] ?? 0) < 5,
+  );
+  if (newCreatorVideos.length > 0) {
+    let ncIdx = 0;
+    const result = [...scored];
+    for (let i = 4; i < result.length; i += 5) {
+      const nc = newCreatorVideos[ncIdx % newCreatorVideos.length];
+      if (result[i]?.id !== nc.id) {
+        result.splice(i, 0, nc);
+        const dupIdx = result.findIndex(
+          (v, idx) => v.id === nc.id && idx !== i,
+        );
+        if (dupIdx !== -1) result.splice(dupIdx, 1);
+      }
+      ncIdx++;
+    }
+    return result;
+  }
+  return scored;
+}
+
+/** Get explore feed filtered by category and sort mode */
+export type SortMode = "trending" | "latest" | "most_viewed" | "most_liked";
+export type ExploreCategory =
+  | "all"
+  | "Comedy"
+  | "Music"
+  | "Dance"
+  | "Short Films"
+  | "Ahirani Culture";
+
+export function getExploreFeed(
+  videos: Video[],
+  category: ExploreCategory,
+  sortMode: SortMode,
+): Video[] {
+  const uploaderCount: Record<string, number> = {};
+  for (const v of videos.filter((v) => !v.isDeleted)) {
+    uploaderCount[v.uploaderId] = (uploaderCount[v.uploaderId] ?? 0) + 1;
+  }
+
+  let filtered = videos.filter((v) => {
+    if (v.isDeleted) return false;
+    if (category === "all") return true;
+    // Match category field (case-insensitive)
+    const cat = (v.category ?? "").toLowerCase();
+    const target = category.toLowerCase();
+    return cat === target || cat.includes(target.split(" ")[0]);
+  });
+
+  switch (sortMode) {
+    case "latest":
+      filtered = filtered.sort((a, b) => b.createdAt - a.createdAt);
+      break;
+    case "most_viewed":
+      filtered = filtered.sort((a, b) => b.viewsCount - a.viewsCount);
+      break;
+    case "most_liked":
+      filtered = filtered.sort((a, b) => b.likesCount - a.likesCount);
+      break;
+    default: {
+      filtered = filtered.sort((a, b) => {
+        const scoreA =
+          a.likesCount * 2 +
+          a.commentsCount * 3 +
+          a.viewsCount * 0.2 +
+          (a.shareCount ?? 0) * 8;
+        const scoreB =
+          b.likesCount * 2 +
+          b.commentsCount * 3 +
+          b.viewsCount * 0.2 +
+          (b.shareCount ?? 0) * 8;
+        return scoreB - scoreA;
+      });
+    }
+  }
+
+  // Inject new-creator every 5th slot
+  const newCreatorVideos = filtered.filter(
+    (v) => (uploaderCount[v.uploaderId] ?? 0) < 5,
+  );
+  if (newCreatorVideos.length > 0) {
+    let ncIdx = 0;
+    const result = [...filtered];
+    for (let i = 4; i < result.length; i += 5) {
+      const nc = newCreatorVideos[ncIdx % newCreatorVideos.length];
+      if (result[i]?.id !== nc.id) {
+        result.splice(i, 0, nc);
+        const dupIdx = result.findIndex(
+          (v, idx) => v.id === nc.id && idx !== i,
+        );
+        if (dupIdx !== -1) result.splice(dupIdx, 1);
+      }
+      ncIdx++;
+    }
+    return result;
+  }
+  return filtered;
 }
 
 export function formatCount(n: number): string {

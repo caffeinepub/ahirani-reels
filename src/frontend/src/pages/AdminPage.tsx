@@ -1914,12 +1914,22 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                           <TableCell className="text-white/70 text-xs max-w-[100px] truncate">
                             {req.userName || "—"}
                           </TableCell>
-                          <TableCell className="text-white/50 text-xs max-w-[140px] truncate">
-                            {req.paymentMethod === "paytm"
-                              ? `Paytm: ${req.paytmNumber}`
-                              : req.paymentMethod === "bank"
-                                ? `Bank: ${req.bankAccountHolder} · ${req.bankAccountNumber} · ${req.bankIfsc}`
-                                : `UPI: ${req.upiId}`}
+                          <TableCell className="text-white/50 text-xs max-w-[160px]">
+                            {req.paymentMethod === "paytm" ? (
+                              <span className="truncate block">{`Paytm: ${req.paytmNumber}`}</span>
+                            ) : req.paymentMethod === "bank" ? (
+                              <div className="space-y-0.5">
+                                {req.bankName && (
+                                  <span className="block truncate text-white/70 font-medium">
+                                    {req.bankName}
+                                  </span>
+                                )}
+                                <span className="block truncate">{`${req.bankAccountHolder ?? "—"}`}</span>
+                                <span className="block truncate text-white/30">{`${req.bankAccountNumber ?? "—"} · ${req.bankIfsc ?? "—"}`}</span>
+                              </div>
+                            ) : (
+                              <span className="truncate block">{`UPI: ${req.upiId}`}</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <span className="text-white font-semibold text-sm">

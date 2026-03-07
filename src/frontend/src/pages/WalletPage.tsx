@@ -1081,7 +1081,7 @@ function ShareButtonsRow({ referralCode }: { referralCode: string }) {
 // ─── Viewer Referral Earnings Dashboard ──────────────────────────────────────
 
 function ViewerReferralDashboard() {
-  const { state, dispatch } = useApp();
+  const { state } = useApp();
   const user = state.currentUser!;
   const liveUser = state.users.find((u) => u.id === user.id) ?? user;
 
@@ -1095,14 +1095,6 @@ function ViewerReferralDashboard() {
   const referralUrl = getReferralLink(user.referralCode);
 
   const [copiedCode, setCopiedCode] = useState(false);
-  const [upiId, setUpiId] = useState("");
-  const [viewerWithdrawName, setViewerWithdrawName] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawLoading, setWithdrawLoading] = useState(false);
-
-  const myWithdrawals = state.withdrawalRequests.filter(
-    (w) => w.userId === user.id,
-  );
 
   const handleCopyCode = async () => {
     try {
@@ -1117,53 +1109,6 @@ function ViewerReferralDashboard() {
 
   const handleShareLink = async () => {
     await shareReferralLink(user.referralCode);
-  };
-
-  const handleWithdraw = async () => {
-    const amount = Number.parseFloat(withdrawAmount);
-    if (!viewerWithdrawName.trim()) {
-      toast.error("Please enter your full name");
-      return;
-    }
-    if (!upiId.trim()) {
-      toast.error("Please enter your UPI ID");
-      return;
-    }
-    if (!withdrawAmount || Number.isNaN(amount) || amount < 200) {
-      toast.error("Minimum withdrawal amount is ₹200");
-      return;
-    }
-    if (amount > pendingEarnings) {
-      toast.error(
-        `Insufficient balance. Available: ₹${pendingEarnings.toFixed(2)}`,
-      );
-      return;
-    }
-
-    setWithdrawLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-
-    const request: WithdrawalRequest = {
-      id: `w${Date.now()}`,
-      userId: user.id,
-      upiId: upiId.trim(),
-      userName: viewerWithdrawName.trim(),
-      amount,
-      status: "pending",
-      createdAt: Date.now(),
-      resolvedAt: 0,
-      processedAt: 0,
-    };
-
-    dispatch({ type: "REQUEST_WITHDRAWAL", request });
-    setUpiId("");
-    setViewerWithdrawName("");
-    setWithdrawAmount("");
-    setWithdrawLoading(false);
-
-    toast.success("Withdrawal request submitted!", {
-      description: `₹${amount.toFixed(2)} to ${upiId.trim()} — pending admin approval`,
-    });
   };
 
   // ── Tier milestone calculations ────────────────────────────────────────────
@@ -1638,161 +1583,6 @@ function ViewerReferralDashboard() {
           </>
         )}
       </motion.div>
-
-      {/* ── Withdrawal Form ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-        className="rounded-2xl border border-white/10 bg-card p-5 space-y-4"
-      >
-        <div className="flex items-center gap-2">
-          <Wallet className="w-5 h-5 text-emerald-400" />
-          <h3 className="text-white font-semibold">Request Withdrawal</h3>
-        </div>
-        <p className="text-white/40 text-xs -mt-1">
-          Minimum ₹200 · Processed within 2-3 business days
-        </p>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="viewer-withdraw-name"
-              className="text-white/70 text-xs font-medium"
-            >
-              Full Name
-            </Label>
-            <Input
-              id="viewer-withdraw-name"
-              data-ocid="wallet.viewer_withdrawal.name_input"
-              placeholder="Your full name"
-              value={viewerWithdrawName}
-              onChange={(e) => setViewerWithdrawName(e.target.value)}
-              className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="viewer-upi-id"
-              className="text-white/70 text-xs font-medium"
-            >
-              UPI ID
-            </Label>
-            <Input
-              id="viewer-upi-id"
-              data-ocid="wallet.viewer_withdrawal.upi_input"
-              placeholder="yourname@upi"
-              value={upiId}
-              onChange={(e) => setUpiId(e.target.value)}
-              className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="viewer-withdraw-amount"
-              className="text-white/70 text-xs font-medium"
-            >
-              Amount (₹)
-            </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-sm font-medium">
-                ₹
-              </span>
-              <Input
-                id="viewer-withdraw-amount"
-                data-ocid="wallet.viewer_withdrawal.amount_input"
-                type="number"
-                min={200}
-                step={1}
-                placeholder="200"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                className="pl-7 bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
-              />
-            </div>
-            <p className="text-white/30 text-[10px]">
-              Available: ₹{pendingEarnings.toFixed(2)} · Min: ₹200
-            </p>
-          </div>
-        </div>
-
-        <Button
-          data-ocid="wallet.viewer_withdrawal.submit_button"
-          onClick={handleWithdraw}
-          disabled={withdrawLoading || pendingEarnings < 200}
-          className="w-full h-11 font-semibold"
-          style={{
-            background:
-              "linear-gradient(135deg, oklch(0.5 0.18 160), oklch(0.45 0.14 160))",
-          }}
-        >
-          {withdrawLoading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Submitting...
-            </span>
-          ) : (
-            <>
-              <IndianRupee className="w-4 h-4 mr-1.5" />
-              Request Withdrawal
-            </>
-          )}
-        </Button>
-
-        {pendingEarnings < 200 && pendingEarnings >= 0 && (
-          <p className="text-amber-400/70 text-[10px] text-center">
-            Earn at least ₹200 in referral rewards to unlock withdrawals
-          </p>
-        )}
-      </motion.div>
-
-      {/* ── Withdrawal History ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="rounded-2xl border border-white/10 bg-card overflow-hidden"
-      >
-        <div className="px-4 py-3 border-b border-white/10">
-          <h3 className="text-white font-semibold text-sm">
-            Withdrawal History
-          </h3>
-        </div>
-
-        {myWithdrawals.length === 0 ? (
-          <div
-            data-ocid="wallet.viewer_withdrawal.empty_state"
-            className="py-10 text-center"
-          >
-            <p className="text-3xl mb-2">💸</p>
-            <p className="text-white/40 text-sm">No withdrawal requests yet</p>
-            <p className="text-white/30 text-xs mt-1">
-              Your requests will appear here
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/5">
-            {myWithdrawals.map((w, i) => (
-              <div
-                key={w.id}
-                data-ocid={`wallet.viewer_withdrawal.item.${i + 1}`}
-                className="px-4 py-3 flex items-center justify-between gap-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-medium">
-                    ₹{w.amount.toFixed(2)}
-                  </p>
-                  <p className="text-white/40 text-xs truncate">{w.upiId}</p>
-                  <p className="text-white/30 text-[10px] mt-0.5">
-                    {formatTime(w.createdAt)} ago
-                  </p>
-                </div>
-                <WithdrawalStatusBadge status={w.status} />
-              </div>
-            ))}
-          </div>
-        )}
-      </motion.div>
     </div>
   );
 }
@@ -1924,8 +1714,102 @@ function ViewerPointsDashboard() {
   const watchedToday = liveUser.watchedVideosToday ?? 0;
   const watchProgress = Math.min((watchedToday / 10) * 100, 100);
 
+  const totalEarningsAll = referralEarnings + watchRewards + loginRewards;
+
   return (
     <div className="space-y-4">
+      {/* ── Total Earnings Hero ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        data-ocid="wallet.earnings.hero_card"
+        className="rounded-2xl relative overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(135deg, oklch(0.14 0.06 160), oklch(0.10 0.04 160))",
+          border: "1px solid oklch(0.55 0.18 160 / 0.4)",
+        }}
+      >
+        <div
+          className="absolute -top-10 -right-10 w-36 h-36 rounded-full opacity-15 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, oklch(0.7 0.22 160), transparent 70%)",
+          }}
+        />
+        <div className="relative z-10 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Wallet className="w-4 h-4 text-emerald-400" />
+            <span className="text-white/60 text-xs font-semibold uppercase tracking-wider">
+              गुण / Earnings
+            </span>
+          </div>
+          <div className="text-center mb-4">
+            <p className="text-white/40 text-xs mb-1">Total Earnings</p>
+            <p
+              className="font-display font-black leading-none"
+              style={{
+                fontSize: "clamp(2.5rem, 10vw, 4rem)",
+                background:
+                  "linear-gradient(135deg, oklch(0.82 0.18 160), oklch(0.72 0.22 180))",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              ₹{totalEarningsAll.toFixed(0)}
+            </p>
+            <p className="text-emerald-400/60 text-xs mt-1">
+              available to withdraw
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div
+              className="rounded-xl p-2.5 text-center"
+              style={{
+                background: "oklch(1 0 0 / 0.06)",
+                border: "1px solid oklch(1 0 0 / 0.1)",
+              }}
+            >
+              <p className="text-reels-pink font-bold text-base font-display leading-none">
+                ₹{referralEarnings.toFixed(0)}
+              </p>
+              <p className="text-white/40 text-[9px] mt-0.5 uppercase tracking-wider">
+                Referral
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-2.5 text-center"
+              style={{
+                background: "oklch(1 0 0 / 0.06)",
+                border: "1px solid oklch(1 0 0 / 0.1)",
+              }}
+            >
+              <p className="text-blue-300 font-bold text-base font-display leading-none">
+                ₹{watchRewards.toFixed(0)}
+              </p>
+              <p className="text-white/40 text-[9px] mt-0.5 uppercase tracking-wider">
+                Watch
+              </p>
+            </div>
+            <div
+              className="rounded-xl p-2.5 text-center"
+              style={{
+                background: "oklch(1 0 0 / 0.06)",
+                border: "1px solid oklch(1 0 0 / 0.1)",
+              }}
+            >
+              <p className="text-violet-300 font-bold text-base font-display leading-none">
+                ₹{loginRewards.toFixed(0)}
+              </p>
+              <p className="text-white/40 text-[9px] mt-0.5 uppercase tracking-wider">
+                Login
+              </p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
       {/* ── Stats Grid ── */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -2553,11 +2437,18 @@ export default function WalletPage() {
   const [copied, setCopied] = useState(false);
   const [adOpen, setAdOpen] = useState(false);
 
-  // Withdrawal form state (for artists)
-  const [upiId, setUpiId] = useState("");
-  const [withdrawName, setWithdrawName] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  // Artist withdrawal form state
+  const [artistPaymentMethod, setArtistPaymentMethod] = useState<
+    "upi" | "bank"
+  >("upi");
+  const [artistFullName, setArtistFullName] = useState("");
+  const [artistUpiId, setArtistUpiId] = useState("");
+  const [artistWithdrawAmount, setArtistWithdrawAmount] = useState("");
+  const [artistBankName, setArtistBankName] = useState("");
+  const [artistBankAccount, setArtistBankAccount] = useState("");
+  const [artistBankIfsc, setArtistBankIfsc] = useState("");
+  const [artistBankHolder, setArtistBankHolder] = useState("");
+  const [artistWithdrawLoading, setArtistWithdrawLoading] = useState(false);
 
   if (!user) return null;
 
@@ -2611,18 +2502,14 @@ export default function WalletPage() {
     dispatch({ type: "ADD_COINS", userId: user.id, amount: 5 });
   };
 
-  const handleWithdraw = async () => {
-    const amount = Number.parseFloat(withdrawAmount);
+  const handleArtistWithdraw = async () => {
+    const amount = Number.parseFloat(artistWithdrawAmount);
 
-    if (!withdrawName.trim()) {
+    if (!artistFullName.trim()) {
       toast.error("Please enter your full name");
       return;
     }
-    if (!upiId.trim()) {
-      toast.error("Please enter your UPI ID");
-      return;
-    }
-    if (!withdrawAmount || Number.isNaN(amount) || amount < 500) {
+    if (!artistWithdrawAmount || Number.isNaN(amount) || amount < 500) {
       toast.error("Minimum withdrawal amount is ₹500");
       return;
     }
@@ -2633,29 +2520,60 @@ export default function WalletPage() {
       return;
     }
 
-    setWithdrawLoading(true);
+    if (artistPaymentMethod === "upi" && !artistUpiId.trim()) {
+      toast.error("Please enter your UPI ID");
+      return;
+    }
+    if (artistPaymentMethod === "bank") {
+      if (
+        !artistBankName.trim() ||
+        !artistBankAccount.trim() ||
+        !artistBankIfsc.trim() ||
+        !artistBankHolder.trim()
+      ) {
+        toast.error("Please fill in all bank transfer details");
+        return;
+      }
+    }
+
+    setArtistWithdrawLoading(true);
     await new Promise((r) => setTimeout(r, 800));
 
     const request: WithdrawalRequest = {
       id: `w${Date.now()}`,
       userId: user.id,
-      upiId: upiId.trim(),
-      userName: withdrawName.trim(),
+      upiId: artistPaymentMethod === "upi" ? artistUpiId.trim() : "",
+      userName: artistFullName.trim(),
       amount,
       status: "pending",
       createdAt: Date.now(),
       resolvedAt: 0,
       processedAt: 0,
+      paymentMethod: artistPaymentMethod,
+      bankName:
+        artistPaymentMethod === "bank" ? artistBankName.trim() : undefined,
+      bankAccountNumber:
+        artistPaymentMethod === "bank" ? artistBankAccount.trim() : undefined,
+      bankIfsc:
+        artistPaymentMethod === "bank" ? artistBankIfsc.trim() : undefined,
+      bankAccountHolder:
+        artistPaymentMethod === "bank" ? artistBankHolder.trim() : undefined,
     };
 
     dispatch({ type: "REQUEST_WITHDRAWAL", request });
-    setUpiId("");
-    setWithdrawName("");
-    setWithdrawAmount("");
-    setWithdrawLoading(false);
 
-    toast.success("Withdrawal request submitted!", {
-      description: `₹${amount.toFixed(2)} to ${upiId.trim()} — pending admin approval`,
+    // Reset form
+    setArtistFullName("");
+    setArtistUpiId("");
+    setArtistWithdrawAmount("");
+    setArtistBankName("");
+    setArtistBankAccount("");
+    setArtistBankIfsc("");
+    setArtistBankHolder("");
+    setArtistWithdrawLoading(false);
+
+    toast.success("Withdrawal request submitted! Pending admin approval", {
+      description: `₹${amount.toFixed(2)} via ${artistPaymentMethod === "upi" ? `UPI: ${artistUpiId.trim()}` : `Bank: ${artistBankHolder.trim()}`}`,
     });
   };
 
@@ -2692,7 +2610,7 @@ export default function WalletPage() {
               className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
             >
               {liveUser.role === "viewer"
-                ? t("wallet.refs")
+                ? "👥 Referral"
                 : t("wallet.earnings")}
             </TabsTrigger>
             {liveUser.role === "viewer" && (
@@ -2701,7 +2619,7 @@ export default function WalletPage() {
                 data-ocid="wallet.points_tab"
                 className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
               >
-                ⭐ {t("wallet.points")}
+                गुण / Earnings
               </TabsTrigger>
             )}
             <TabsTrigger
@@ -2711,13 +2629,15 @@ export default function WalletPage() {
             >
               🎁 {t("wallet.rewards")}
             </TabsTrigger>
-            <TabsTrigger
-              value="referral"
-              data-ocid="wallet.referral_tab"
-              className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
-            >
-              {t("wallet.refs")}
-            </TabsTrigger>
+            {liveUser.role !== "viewer" && (
+              <TabsTrigger
+                value="referral"
+                data-ocid="wallet.referral_tab"
+                className="flex-1 text-white/60 data-[state=active]:text-white data-[state=active]:bg-white/10 text-xs whitespace-nowrap"
+              >
+                {t("wallet.refs")}
+              </TabsTrigger>
+            )}
             <TabsTrigger
               value="transactions"
               data-ocid="wallet.transactions_tab"
@@ -3272,11 +3192,12 @@ export default function WalletPage() {
                   )}
                 </motion.div>
 
-                {/* ── Withdrawal form ── */}
+                {/* ── Artist Withdrawal Form ── */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
+                  data-ocid="wallet.artist_withdraw.card"
                   className="rounded-2xl border border-white/10 bg-card p-5 space-y-4"
                 >
                   <div className="flex items-center gap-2">
@@ -3289,42 +3210,166 @@ export default function WalletPage() {
                     Minimum ₹500 · Processed within 2-3 business days
                   </p>
 
+                  {/* Payment method selector */}
+                  <div className="space-y-1.5">
+                    <Label className="text-white/70 text-xs font-medium">
+                      Payment Method
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["upi", "bank"] as const).map((method) => {
+                        const cfg = {
+                          upi: { icon: "🏦", label: "UPI" },
+                          bank: { icon: "🏛️", label: "Bank Transfer" },
+                        };
+                        return (
+                          <button
+                            key={method}
+                            type="button"
+                            data-ocid={`wallet.artist_withdraw.${method}_toggle`}
+                            onClick={() => setArtistPaymentMethod(method)}
+                            className="flex items-center justify-center gap-2 py-3 px-3 rounded-xl border transition-all text-sm font-medium"
+                            style={{
+                              background:
+                                artistPaymentMethod === method
+                                  ? "oklch(0.5 0.18 160 / 0.25)"
+                                  : "oklch(1 0 0 / 0.05)",
+                              borderColor:
+                                artistPaymentMethod === method
+                                  ? "oklch(0.5 0.18 160 / 0.6)"
+                                  : "oklch(1 0 0 / 0.12)",
+                              color:
+                                artistPaymentMethod === method
+                                  ? "oklch(0.8 0.15 160)"
+                                  : "oklch(0.6 0.02 0)",
+                            }}
+                          >
+                            <span>{cfg[method].icon}</span>
+                            {cfg[method].label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
+                    {/* Full Name — always visible */}
                     <div className="space-y-1.5">
                       <Label
-                        htmlFor="withdraw-name"
+                        htmlFor="artist-withdraw-name"
                         className="text-white/70 text-xs font-medium"
                       >
                         Full Name
                       </Label>
                       <Input
-                        id="withdraw-name"
-                        data-ocid="wallet.withdraw_name_input"
+                        id="artist-withdraw-name"
+                        data-ocid="wallet.artist_withdraw.name_input"
                         placeholder="Your full name"
-                        value={withdrawName}
-                        onChange={(e) => setWithdrawName(e.target.value)}
+                        value={artistFullName}
+                        onChange={(e) => setArtistFullName(e.target.value)}
                         className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
                       />
                     </div>
+
+                    {/* UPI ID — visible when UPI selected */}
+                    {artistPaymentMethod === "upi" && (
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="artist-upi-id"
+                          className="text-white/70 text-xs font-medium"
+                        >
+                          UPI ID
+                        </Label>
+                        <Input
+                          id="artist-upi-id"
+                          data-ocid="wallet.artist_withdraw.upi_input"
+                          placeholder="yourname@upi"
+                          value={artistUpiId}
+                          onChange={(e) => setArtistUpiId(e.target.value)}
+                          className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                        />
+                      </div>
+                    )}
+
+                    {/* Bank fields — visible when Bank Transfer selected */}
+                    {artistPaymentMethod === "bank" && (
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label
+                            htmlFor="artist-bank-name"
+                            className="text-white/70 text-xs font-medium"
+                          >
+                            Bank Name
+                          </Label>
+                          <Input
+                            id="artist-bank-name"
+                            data-ocid="wallet.artist_withdraw.bank_name_input"
+                            placeholder="e.g. State Bank of India"
+                            value={artistBankName}
+                            onChange={(e) => setArtistBankName(e.target.value)}
+                            className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label
+                            htmlFor="artist-bank-account"
+                            className="text-white/70 text-xs font-medium"
+                          >
+                            Account Number
+                          </Label>
+                          <Input
+                            id="artist-bank-account"
+                            data-ocid="wallet.artist_withdraw.bank_account_input"
+                            placeholder="Enter account number"
+                            value={artistBankAccount}
+                            onChange={(e) =>
+                              setArtistBankAccount(e.target.value)
+                            }
+                            className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label
+                            htmlFor="artist-bank-ifsc"
+                            className="text-white/70 text-xs font-medium"
+                          >
+                            IFSC Code
+                          </Label>
+                          <Input
+                            id="artist-bank-ifsc"
+                            data-ocid="wallet.artist_withdraw.ifsc_input"
+                            placeholder="e.g. SBIN0001234"
+                            value={artistBankIfsc}
+                            onChange={(e) =>
+                              setArtistBankIfsc(e.target.value.toUpperCase())
+                            }
+                            className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label
+                            htmlFor="artist-bank-holder"
+                            className="text-white/70 text-xs font-medium"
+                          >
+                            Account Holder Name
+                          </Label>
+                          <Input
+                            id="artist-bank-holder"
+                            data-ocid="wallet.artist_withdraw.bank_holder_input"
+                            placeholder="Name as per bank records"
+                            value={artistBankHolder}
+                            onChange={(e) =>
+                              setArtistBankHolder(e.target.value)
+                            }
+                            className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Amount */}
                     <div className="space-y-1.5">
                       <Label
-                        htmlFor="upi-id"
-                        className="text-white/70 text-xs font-medium"
-                      >
-                        UPI ID
-                      </Label>
-                      <Input
-                        id="upi-id"
-                        data-ocid="wallet.upi_input"
-                        placeholder="yourname@upi"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label
-                        htmlFor="withdraw-amount"
+                        htmlFor="artist-withdraw-amount"
                         className="text-white/70 text-xs font-medium"
                       >
                         Amount (₹)
@@ -3334,14 +3379,16 @@ export default function WalletPage() {
                           ₹
                         </span>
                         <Input
-                          id="withdraw-amount"
-                          data-ocid="wallet.amount_input"
+                          id="artist-withdraw-amount"
+                          data-ocid="wallet.artist_withdraw.amount_input"
                           type="number"
                           min={500}
                           step={1}
                           placeholder="500"
-                          value={withdrawAmount}
-                          onChange={(e) => setWithdrawAmount(e.target.value)}
+                          value={artistWithdrawAmount}
+                          onChange={(e) =>
+                            setArtistWithdrawAmount(e.target.value)
+                          }
                           className="pl-7 bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
                         />
                       </div>
@@ -3352,16 +3399,16 @@ export default function WalletPage() {
                   </div>
 
                   <Button
-                    data-ocid="wallet.withdraw_button"
-                    onClick={handleWithdraw}
-                    disabled={withdrawLoading}
+                    data-ocid="wallet.artist_withdraw.submit_button"
+                    onClick={handleArtistWithdraw}
+                    disabled={artistWithdrawLoading || pendingEarnings < 500}
                     className="w-full h-11 font-semibold"
                     style={{
                       background:
                         "linear-gradient(135deg, oklch(0.5 0.18 160), oklch(0.45 0.14 160))",
                     }}
                   >
-                    {withdrawLoading ? (
+                    {artistWithdrawLoading ? (
                       <span className="flex items-center gap-2">
                         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         Submitting...
@@ -3373,6 +3420,12 @@ export default function WalletPage() {
                       </>
                     )}
                   </Button>
+
+                  {pendingEarnings < 500 && (
+                    <p className="text-amber-400/70 text-[10px] text-center">
+                      Earn at least ₹500 to unlock withdrawals
+                    </p>
+                  )}
                 </motion.div>
 
                 {/* ── Withdrawal history ── */}
@@ -3403,26 +3456,34 @@ export default function WalletPage() {
                     </div>
                   ) : (
                     <div className="divide-y divide-white/5">
-                      {myWithdrawals.map((w, i) => (
-                        <div
-                          key={w.id}
-                          data-ocid={`wallet.withdrawal.item.${i + 1}`}
-                          className="px-4 py-3 flex items-center justify-between gap-3"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-sm font-medium">
-                              ₹{w.amount.toFixed(2)}
-                            </p>
-                            <p className="text-white/40 text-xs truncate">
-                              {w.upiId}
-                            </p>
-                            <p className="text-white/30 text-[10px] mt-0.5">
-                              {formatTime(w.createdAt)} ago
-                            </p>
+                      {myWithdrawals.map((w, i) => {
+                        const methodLabel =
+                          w.paymentMethod === "bank"
+                            ? `Bank: ${w.bankAccountHolder ?? w.bankName ?? "—"}`
+                            : w.paymentMethod === "paytm"
+                              ? `Paytm: ${w.paytmNumber ?? "—"}`
+                              : `UPI: ${w.upiId || "—"}`;
+                        return (
+                          <div
+                            key={w.id}
+                            data-ocid={`wallet.withdrawal.item.${i + 1}`}
+                            className="px-4 py-3 flex items-center justify-between gap-3"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-medium">
+                                ₹{w.amount.toFixed(2)}
+                              </p>
+                              <p className="text-white/40 text-xs truncate">
+                                {methodLabel}
+                              </p>
+                              <p className="text-white/30 text-[10px] mt-0.5">
+                                {formatTime(w.createdAt)} ago
+                              </p>
+                            </div>
+                            <WithdrawalStatusBadge status={w.status} />
                           </div>
-                          <WithdrawalStatusBadge status={w.status} />
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </motion.div>

@@ -436,7 +436,6 @@ export default function CameraRecordPage() {
 
   // ── Actual recording start ───────────────────────────────────────────────────
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: uses stable refs
   const beginRecording = useCallback(() => {
     const stream = streamRef.current;
     if (!stream) {

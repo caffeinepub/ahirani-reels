@@ -35,7 +35,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArtistProfileSheet } from "../components/ArtistProfileSheet";
 import { ArtistSearchSheet } from "../components/ArtistSearchSheet";
@@ -61,6 +61,7 @@ import {
   formatTime,
   generateId,
   getTrendingFeed,
+  getTrendingTabFeed,
 } from "../utils/trending";
 
 // ─── Video Type Badge ─────────────────────────────────────────────────────────
@@ -1234,11 +1235,23 @@ export default function FeedPage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [showAd, setShowAd] = useState(false);
   const [activeTab, setActiveTab] = useState<FeedTab>("foryou");
+  const [trendingRefreshKey, setTrendingRefreshKey] = useState(() =>
+    Date.now(),
+  );
   const [searchOpen, setSearchOpen] = useState(false);
   const [preRollVideoId, setPreRollVideoId] = useState<string | null>(null);
   const preRolledVideosRef = useRef<Set<string>>(new Set());
   const videosScrolledRef = useRef(0);
   const feedRef = useRef<HTMLDivElement>(null);
+
+  // Auto-refresh trending every 3 hours
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTrendingRefreshKey(Date.now());
+      toast.success("🔥 Trending updated!");
+    }, 10_800_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const activeLiveStreams = state.liveStreams.filter((s) => s.isActive);
   const isArtistWithActiveSub =
@@ -1265,26 +1278,13 @@ export default function FeedPage() {
     .filter((v) => !v.isDeleted && state.followingIds.includes(v.uploaderId))
     .sort((a, b) => b.createdAt - a.createdAt);
 
-  // Trending feed: sorted by engagement + promoted boost
-  const trendingFeed = state.videos
-    .filter((v) => !v.isDeleted)
-    .map((v) => {
-      const promotionBoost =
-        v.isPromoted && v.promotionExpiry && v.promotionExpiry > Date.now()
-          ? 500
-          : 0;
-      return {
-        video: v,
-        score:
-          v.likesCount * 1.5 +
-          v.commentsCount * 2.0 +
-          v.viewsCount * 0.1 +
-          (v.shareCount ?? 0) * 5 +
-          promotionBoost,
-      };
-    })
-    .sort((a, b) => b.score - a.score)
-    .map((s) => s.video);
+  // Trending feed: upgraded algorithm with recency decay + new-creator injection
+  // trendingRefreshKey is used to force recompute every 3h via the auto-refresh interval
+  const trendingFeed = useMemo(() => {
+    // Reference trendingRefreshKey so useMemo recomputes on refresh
+    void trendingRefreshKey;
+    return getTrendingTabFeed(state.videos);
+  }, [trendingRefreshKey, state.videos]);
   const localAds: LocalAd[] = state.localAds ?? [];
 
   const handleSeen = useCallback(

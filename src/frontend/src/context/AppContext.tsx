@@ -49,6 +49,7 @@ export interface WithdrawalRequest {
   processedAt: number; // 0 if not processed; set on approve, updated on paid
   paymentMethod?: "upi" | "paytm" | "bank";
   paytmNumber?: string;
+  bankName?: string;
   bankAccountNumber?: string;
   bankIfsc?: string;
   bankAccountHolder?: string;
@@ -139,6 +140,7 @@ export interface Video {
   promotionTier?: "basic" | "standard" | "premium";
   mediaType?: "video" | "photo"; // optional; defaults to "video" for existing content
   isFeatured?: boolean;
+  category?: string; // e.g. "Comedy", "Music", "Dance", "Short Films", "Ahirani Culture"
 }
 
 export interface Comment {

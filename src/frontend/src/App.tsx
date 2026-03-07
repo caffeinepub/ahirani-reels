@@ -19,6 +19,7 @@ import CameraRecordPage from "./pages/CameraRecordPage";
 import ContactPage from "./pages/ContactPage";
 import EditPhotoPage from "./pages/EditPhotoPage";
 import EditVideoPage from "./pages/EditVideoPage";
+import ExplorePage from "./pages/ExplorePage";
 import FeedPage from "./pages/FeedPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
 import LivePage from "./pages/LivePage";
@@ -207,6 +208,12 @@ const musicLibraryRoute = createRoute({
   component: MusicLibraryPage,
 });
 
+const exploreRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/explore",
+  component: ExplorePage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   uploadRoute,
@@ -226,6 +233,7 @@ const routeTree = rootRoute.addChildren([
   editVideoRoute,
   editPhotoRoute,
   musicLibraryRoute,
+  exploreRoute,
 ]);
 
 const router = createRouter({ routeTree });

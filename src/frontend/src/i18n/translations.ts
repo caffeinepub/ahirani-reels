@@ -5,6 +5,7 @@ const translations: Record<Lang, Record<string, string>> = {
     // Nav
     "nav.home": "Home",
     "nav.search": "Search",
+    "nav.explore": "Explore",
     "nav.upload": "Upload",
     "nav.live": "Live",
     "nav.ranks": "Ranks",
@@ -64,6 +65,7 @@ const translations: Record<Lang, Record<string, string>> = {
     // Nav
     "nav.home": "मुख्यपृष्ठ",
     "nav.search": "शोधा",
+    "nav.explore": "एक्सप्लोर",
     "nav.upload": "अपलोड",
     "nav.live": "लाईव्ह",
     "nav.ranks": "रँकिंग",
@@ -122,6 +124,7 @@ const translations: Record<Lang, Record<string, string>> = {
     // Nav
     "nav.home": "होम",
     "nav.search": "खोजें",
+    "nav.explore": "एक्सप्लोर",
     "nav.upload": "अपलोड",
     "nav.live": "लाइव",
     "nav.ranks": "रैंकिंग",

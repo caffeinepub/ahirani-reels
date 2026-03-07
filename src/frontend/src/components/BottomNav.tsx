@@ -1,5 +1,13 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, PlusSquare, Search, Trophy, User, Wallet } from "lucide-react";
+import {
+  Compass,
+  Home,
+  PlusSquare,
+  Search,
+  Trophy,
+  User,
+  Wallet,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useApp, useBackendConnected } from "../context/AppContext";
 import { useLang } from "../context/LanguageContext";
@@ -40,6 +48,13 @@ const ALL_NAV_ITEMS = [
     label: "Search",
     tKey: "nav.search",
     ocid: "nav.search_link",
+  },
+  {
+    to: "/explore",
+    icon: Compass,
+    label: "Explore",
+    tKey: "nav.explore",
+    ocid: "nav.explore_link",
   },
   {
     to: "/upload",

@@ -2,37 +2,44 @@
 
 ## Current State
 
-- `ads-config.ts` holds hardcoded AdMob/Meta Ad Unit IDs (BANNER, INTERSTITIAL, REWARDED, PRE_ROLL).
-- Admin Panel has tabs: overview, users, videos, comments, withdrawals, upload, ads, live, reports, security.
-- The "ads" tab currently shows local/business ad management (create local ads, manage active ones).
-- No UI exists to update AdMob/Meta Ad Unit IDs without editing code files.
-- AppContext manages all frontend state; backend (main.mo) stores local ads only.
+Artist wallet (WalletPage.tsx) has a minimal withdrawal section inside the main "Wallet" tab. It only supports UPI ID as a payment method. It collects Full Name, UPI ID, and Amount. There is no Bank Transfer option for Artists.
+
+The Viewer wallet already has a full withdrawal form with UPI, Paytm, and Bank Transfer options (in `ViewerPointsDashboard`).
+
+Admin panel (AdminPage.tsx) has a withdrawals tab that shows all requests and allows approve/reject/mark-paid actions -- this already works for all roles.
 
 ## Requested Changes (Diff)
 
 ### Add
-- A new "Ad Settings" sub-section inside the existing Admin Panel "ads" tab (or as a clearly separated card within it).
-- Four editable fields for Google AdMob IDs: Banner, Interstitial, Rewarded, Pre-roll Video.
-- Three editable fields for Meta Audience Network IDs: Banner, Interstitial, Pre-roll.
-- A "Save" button that persists the IDs to AppContext state (adUnitIds).
-- On app load, the ad components (BannerAd, InterstitialAd, RewardedAd, PreRollAd) read IDs from AppContext state instead of hardcoded ads-config.ts.
-- A new `adUnitIds` field in AppContext AppState with default values seeded from `ads-config.ts`.
-- A `SET_AD_UNIT_IDS` dispatch action in AppContext reducer.
-- Success toast on save.
+- Bank Transfer payment method for Artist withdrawal form (alongside existing UPI)
+- Bank Transfer fields: Account Holder Name, Bank Name, Account Number, IFSC Code
+- Payment method toggle (UPI / Bank Transfer) in Artist withdrawal section
+- Artist withdrawal history section showing past requests with status badges
 
 ### Modify
-- AdminPage.tsx: Add "Ad Settings" card in the "ads" tab with Google AdMob and Meta sections.
-- AppContext.tsx: Add `adUnitIds` to state shape and reducer.
-- BannerAd.tsx, InterstitialAd.tsx, RewardedAd.tsx, PreRollAd.tsx: Read IDs from AppContext `adUnitIds` instead of directly from ads-config.ts constants.
+- Artist withdrawal form: replace the simple UPI-only form with a full form that has:
+  - Payment method selector: UPI | Bank Transfer (2 options, no Paytm)
+  - Full Name field (always shown)
+  - UPI ID field (shown when UPI selected)
+  - Bank fields: Account Holder Name, Bank Name, Account Number, IFSC Code (shown when Bank Transfer selected)
+  - Amount field (minimum ₹500 for artists)
+- The withdrawal form should be clearly placed in the Artist "Earnings" tab (already the `wallet.earnings_tab`)
+- Update `handleWithdraw` in WalletPage for artists to support both methods and pass bank details to WithdrawalRequest
 
 ### Remove
-- Nothing removed. ads-config.ts remains as the fallback/default source.
+- Nothing removed; existing Admin panel withdrawal management remains intact
 
 ## Implementation Plan
 
-1. Add `AdUnitIds` type and `adUnitIds` field to AppContext state, seeded from ads-config.ts defaults.
-2. Add `SET_AD_UNIT_IDS` action to AppContext reducer.
-3. Update ad components to use `useApp().state.adUnitIds` for their unit IDs.
-4. In AdminPage.tsx "ads" tab, add a new "Ad Settings" card with labeled inputs for all 7 IDs (4 Google AdMob + 3 Meta), and a Save button that dispatches SET_AD_UNIT_IDS.
-5. Show current saved IDs pre-filled in the inputs.
-6. Add deterministic data-ocid markers to all inputs, selects, and buttons in the new card.
+1. In `WalletPage.tsx`, update the artist withdrawal form (inside `TabsContent value="earnings"`) to:
+   - Add a `paymentMethod` state (`"upi" | "bank"`)
+   - Add state for: `bankName`, `bankAccount`, `bankIfsc`, `bankHolder`
+   - Render a 2-option payment method selector (UPI / Bank Transfer)
+   - Conditionally show UPI ID field OR Bank fields based on selected method
+   - Update `handleWithdraw` for artists to build a `WithdrawalRequest` with `paymentMethod`, `bankAccountNumber`, `bankIfsc`, `bankAccountHolder`, and a new `bankName` field (add to `WithdrawalRequest` type)
+   - Add minimum ₹500 validation for artists
+   - Add a withdrawal history list below the form showing `myWithdrawals` with status badges
+
+2. In `AppContext.tsx`, add optional `bankName?: string` field to `WithdrawalRequest` type for storing bank name.
+
+3. In `AdminPage.tsx`, display `bankName` in the withdrawal detail row when present (alongside existing bank fields).
