@@ -41,6 +41,7 @@ import {
   UserX,
   Users,
   Wallet,
+  X,
   XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -61,6 +62,7 @@ import type {
 } from "../context/AppContext";
 import { computeVideoEarnings, useApp } from "../context/AppContext";
 import { formatCount, formatTime, generateId } from "../utils/trending";
+import { saveVideoFileToDB } from "../utils/videoDB";
 
 const ADMIN_NAME = "समाधान माळी";
 
@@ -298,11 +300,14 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
   // Admin upload form state
   const [adminVideoUrl, setAdminVideoUrl] = useState("");
+  const [adminVideoFile, setAdminVideoFile] = useState<File | null>(null);
+  const [adminVideoPreview, setAdminVideoPreview] = useState<string>("");
   const [adminCaption, setAdminCaption] = useState("");
   const [adminHashtagInput, setAdminHashtagInput] = useState("");
   const [adminHashtags, setAdminHashtags] = useState<string[]>([]);
   const [adminVideoType, setAdminVideoType] = useState<VideoType>("reel");
   const [adminPosting, setAdminPosting] = useState(false);
+  const adminFileInputRef = useRef<HTMLInputElement>(null);
 
   // RPM config local state (pre-filled from global state)
   const [rpmDraft, setRpmDraft] = useState<AdRpmConfig>({ ...state.rpmConfig });
@@ -423,8 +428,11 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   };
 
   const handleAdminPost = async () => {
-    if (!adminVideoUrl.trim()) {
-      toast.error("Please enter a video URL");
+    const hasFile = !!adminVideoFile;
+    const hasUrl = adminVideoUrl.trim().length > 0;
+
+    if (!hasFile && !hasUrl) {
+      toast.error("Please select a video file or enter a video URL");
       return;
     }
     if (!adminCaption.trim()) {
@@ -432,32 +440,54 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       return;
     }
     setAdminPosting(true);
-    await new Promise((r) => setTimeout(r, 600));
-    dispatch({
-      type: "UPLOAD_VIDEO",
-      video: {
-        id: generateId(),
-        uploaderId: "admin",
-        url: adminVideoUrl.trim(),
-        caption: adminCaption.trim(),
-        hashtags: adminHashtags.length > 0 ? adminHashtags : [adminVideoType],
-        likesCount: 0,
-        commentsCount: 0,
-        createdAt: Date.now(),
-        isDeleted: false,
-        videoType: adminVideoType,
-        viewsCount: 0,
-        adImpressions: 0,
-        shareCount: 0,
-      },
-    });
-    setAdminVideoUrl("");
-    setAdminCaption("");
-    setAdminHashtagInput("");
-    setAdminHashtags([]);
-    setAdminVideoType("reel");
-    setAdminPosting(false);
-    toast.success("Video posted!");
+
+    try {
+      const videoId = generateId();
+      let finalUrl = adminVideoUrl.trim();
+
+      if (hasFile && adminVideoFile) {
+        // Save file to IndexedDB and use blob URL for immediate playback
+        await saveVideoFileToDB(videoId, adminVideoFile);
+        finalUrl = URL.createObjectURL(adminVideoFile);
+      }
+
+      dispatch({
+        type: "UPLOAD_VIDEO",
+        video: {
+          id: videoId,
+          uploaderId: "admin",
+          url: finalUrl,
+          caption: adminCaption.trim(),
+          hashtags: adminHashtags.length > 0 ? adminHashtags : [adminVideoType],
+          likesCount: 0,
+          commentsCount: 0,
+          createdAt: Date.now(),
+          isDeleted: false,
+          videoType: adminVideoType,
+          viewsCount: 0,
+          adImpressions: 0,
+          shareCount: 0,
+        },
+      });
+
+      // Cleanup
+      if (adminVideoPreview && hasFile) {
+        // Keep blob URL alive for the feed — don't revoke
+      }
+      setAdminVideoUrl("");
+      setAdminVideoFile(null);
+      setAdminVideoPreview("");
+      setAdminCaption("");
+      setAdminHashtagInput("");
+      setAdminHashtags([]);
+      setAdminVideoType("reel");
+      toast.success("Video posted!");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Upload failed: ${msg}`);
+    } finally {
+      setAdminPosting(false);
+    }
   };
 
   const pendingReports = state.reports ?? [];
@@ -1560,12 +1590,26 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                       >
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-10 h-14 bg-white/10 rounded overflow-hidden shrink-0">
-                              <video
-                                src={video.url}
-                                className="w-full h-full object-cover"
-                                muted
-                              />
+                            <div className="w-10 h-14 bg-white/10 rounded overflow-hidden shrink-0 flex items-center justify-center">
+                              {video.thumbnail ? (
+                                <img
+                                  src={video.thumbnail}
+                                  alt={video.caption}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : video.url && video.url !== "__local__" ? (
+                                <video
+                                  src={video.url}
+                                  className="w-full h-full object-cover"
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                />
+                              ) : (
+                                <span className="text-white/30 text-xs text-center leading-tight px-0.5">
+                                  {video.url === "__local__" ? "⏳" : "🎬"}
+                                </span>
+                              )}
                             </div>
                             <div className="min-w-0">
                               <p className="text-white text-xs line-clamp-2">
@@ -2044,6 +2088,90 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             {/* Photo Upload option */}
             <AdminPhotoUploadButton navigate={navigate} />
 
+            {/* Upload video from gallery */}
+            <div>
+              <button
+                type="button"
+                data-ocid="admin.upload_file_button"
+                onClick={() => adminFileInputRef.current?.click()}
+                className="w-full flex items-center gap-3 rounded-xl px-4 py-3.5 border border-white/20 bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all text-left"
+              >
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                  style={{
+                    background: "oklch(0.55 0.22 260 / 0.25)",
+                    border: "1px solid oklch(0.55 0.22 260 / 0.4)",
+                  }}
+                >
+                  <Film
+                    className="w-5 h-5"
+                    style={{ color: "oklch(0.7 0.2 260)" }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold text-sm">
+                    {adminVideoFile
+                      ? adminVideoFile.name
+                      : "Upload Video from Gallery"}
+                  </p>
+                  <p className="text-white/40 text-xs mt-0.5">
+                    {adminVideoFile
+                      ? `${(adminVideoFile.size / 1024 / 1024).toFixed(1)} MB selected`
+                      : "MP4, MOV, WebM · Max 100MB"}
+                  </p>
+                </div>
+                {adminVideoFile && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAdminVideoFile(null);
+                      setAdminVideoPreview("");
+                    }}
+                    className="shrink-0 text-white/40 hover:text-red-400 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </button>
+              <input
+                ref={adminFileInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 100 * 1024 * 1024) {
+                    toast.error("Video is too large. Maximum size is 100MB.");
+                    return;
+                  }
+                  setAdminVideoFile(file);
+                  setAdminVideoPreview(URL.createObjectURL(file));
+                  setAdminVideoUrl(""); // clear URL if file selected
+                  e.target.value = "";
+                }}
+              />
+            </div>
+
+            {/* Video preview */}
+            {adminVideoPreview && (
+              <video
+                src={adminVideoPreview}
+                className="w-full rounded-xl"
+                style={{
+                  maxHeight: 200,
+                  objectFit: "contain",
+                  background: "black",
+                }}
+                controls
+                playsInline
+                muted
+              >
+                <track kind="captions" />
+              </video>
+            )}
+
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-white/10" />
               <span className="text-white/30 text-xs">or paste a URL</span>
@@ -2064,7 +2192,13 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 data-ocid="admin.upload_url_input"
                 placeholder="https://..."
                 value={adminVideoUrl}
-                onChange={(e) => setAdminVideoUrl(e.target.value)}
+                onChange={(e) => {
+                  setAdminVideoUrl(e.target.value);
+                  if (e.target.value) {
+                    setAdminVideoFile(null); // clear file if URL typed
+                    setAdminVideoPreview("");
+                  }
+                }}
                 className="bg-white/10 border-white/20 text-white placeholder:text-white/30 h-11"
               />
             </div>
@@ -2203,7 +2337,9 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               data-ocid="admin.upload_submit_button"
               onClick={handleAdminPost}
               disabled={
-                adminPosting || !adminVideoUrl.trim() || !adminCaption.trim()
+                adminPosting ||
+                (!adminVideoUrl.trim() && !adminVideoFile) ||
+                !adminCaption.trim()
               }
               className="w-full h-12 font-bold text-base"
               style={{

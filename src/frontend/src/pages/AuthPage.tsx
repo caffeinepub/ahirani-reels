@@ -91,13 +91,14 @@ export default function AuthPage() {
     }
   }, []);
 
-  // Long-press logo (500ms) → navigate to admin login (hidden entry)
+  // Long-press logo (10s) → navigate to admin login (hidden entry)
   const logoLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [logoError, setLogoError] = useState(false);
 
   const handleLogoPointerDown = () => {
     logoLongPressTimer.current = setTimeout(() => {
       window.location.href = "/admin-login";
-    }, 500);
+    }, 10000); // 10 seconds
   };
 
   const handleLogoPointerUp = () => {
@@ -453,13 +454,26 @@ export default function AuthPage() {
           onTouchStart={handleLogoPointerDown}
           onTouchEnd={handleLogoPointerUp}
         >
-          <img
-            src="/assets/generated/fakt-ahirani-logo-v2.dim_200x200.png"
-            alt="फक्त अहिराणी"
-            className="w-full h-full object-cover rounded-2xl pointer-events-none select-none"
-            draggable={false}
-            onContextMenu={(e) => e.preventDefault()}
-          />
+          {logoError ? (
+            <div
+              className="w-full h-full rounded-2xl flex items-center justify-center text-white font-black text-2xl"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+              }}
+            >
+              फअ
+            </div>
+          ) : (
+            <img
+              src="/assets/generated/fakt-ahirani-logo-v2.dim_200x200.png"
+              alt="फक्त अहिराणी"
+              className="w-full h-full object-cover rounded-2xl pointer-events-none select-none"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+              onError={() => setLogoError(true)}
+            />
+          )}
         </div>
         <h1 className="font-display text-3xl font-bold text-white tracking-tight">
           फक्त अहिराणी

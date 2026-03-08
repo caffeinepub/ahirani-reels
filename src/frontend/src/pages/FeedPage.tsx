@@ -235,6 +235,8 @@ function ReelCard({
   const [promoteOpen, setPromoteOpen] = useState(false);
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [videoUnavailable, setVideoUnavailable] = useState(false);
   const isFollowing = useIsFollowing(video.uploaderId);
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const ocidIndex = index + 1;
@@ -276,39 +278,89 @@ function ReelCard({
     if (!vid) return;
 
     if (isActive) {
+      // If URL is a placeholder, wait up to 3s for IndexedDB restore before marking unavailable
+      if (!video.url || video.url === "__local__") {
+        setVideoLoading(true);
+        setVideoUnavailable(false);
+        const waitTimer = setTimeout(() => {
+          // Still __local__ after 3 seconds — IndexedDB restore didn't happen
+          setVideoLoading(false);
+          setVideoUnavailable(true);
+        }, 3000);
+        return () => clearTimeout(waitTimer);
+      }
+      // Reset loading/unavailable state when card becomes active
+      setVideoUnavailable(false);
+      setVideoLoading(true);
+
+      const isBlobOrData =
+        video.url.startsWith("data:") || video.url.startsWith("blob:");
+
+      // For data: or blob: URLs, always set src directly (no <source> tags)
+      if (isBlobOrData) {
+        if (vid.src !== video.url) {
+          vid.src = video.url;
+        }
+      }
+
       const tryPlay = () => {
-        vid.play().catch(() => {
-          // Retry after short delay — handles blob URLs that need buffering
-          setTimeout(() => vid.play().catch(() => {}), 400);
-        });
+        vid
+          .play()
+          .then(() => {
+            setVideoLoading(false);
+            setIsPaused(false);
+          })
+          .catch((playErr) => {
+            console.warn("Video play failed, retrying:", playErr?.message);
+            // Retry after short delay — handles blob/data URLs that need buffering
+            setTimeout(() => {
+              vid
+                .play()
+                .then(() => {
+                  setVideoLoading(false);
+                  setIsPaused(false);
+                })
+                .catch(() => {
+                  // Final fallback: show play button instead of spinner
+                  setVideoLoading(false);
+                  setIsPaused(true);
+                });
+            }, 600);
+          });
       };
 
-      if (vid.readyState === 0) {
-        // Not loaded yet — load first, then play on canplay event
+      if (vid.readyState === 0 || (isBlobOrData && vid.readyState < 2)) {
+        // Need to load first — use canplay event
         vid.load();
         const onCanPlay = () => {
           tryPlay();
+          setVideoLoading(false);
           vid.removeEventListener("canplay", onCanPlay);
+          vid.removeEventListener("canplaythrough", onCanPlay);
         };
         vid.addEventListener("canplay", onCanPlay);
-        // Fallback: try playing after 800ms even without event
+        vid.addEventListener("canplaythrough", onCanPlay);
+        // Fallback: try playing after 2000ms even without event
         seenTimerRef.current = setTimeout(() => {
           vid.removeEventListener("canplay", onCanPlay);
+          vid.removeEventListener("canplaythrough", onCanPlay);
           tryPlay();
-        }, 800);
+        }, 2000);
       } else {
         tryPlay();
         seenTimerRef.current = setTimeout(() => onSeen(video.id), 2000);
       }
     } else {
+      // Card is no longer active — pause and reset
       vid.pause();
       vid.currentTime = 0;
+      setVideoLoading(true);
       if (seenTimerRef.current) clearTimeout(seenTimerRef.current);
     }
     return () => {
       if (seenTimerRef.current) clearTimeout(seenTimerRef.current);
     };
-  }, [isActive, video.id, onSeen, isPhoto]);
+  }, [isActive, video.id, video.url, onSeen, isPhoto]);
 
   const handleLike = () => {
     if (!state.currentUser) return;
@@ -379,42 +431,100 @@ function ReelCard({
     >
       {/* Video or Photo */}
       {isPhoto ? (
-        <img
-          src={video.url}
-          alt={video.caption}
-          className="absolute inset-0 w-full h-full object-cover"
-          style={isPremiumLocked ? { filter: "blur(4px)" } : {}}
-        />
+        video.url && video.url !== "__local__" ? (
+          <img
+            src={video.url}
+            alt={video.caption}
+            className="absolute inset-0 w-full h-full object-cover"
+            style={isPremiumLocked ? { filter: "blur(4px)" } : {}}
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70">
+            <span className="text-3xl">📷</span>
+            <p className="text-white/40 text-sm mt-2">Photo unavailable</p>
+          </div>
+        )
       ) : (
         <>
           <video
             ref={videoRef}
+            poster={video.thumbnail || undefined}
             className={`absolute inset-0 w-full h-full object-cover ${isPremiumLocked ? "blur" : ""}`}
             style={isPremiumLocked ? { filter: "blur(4px)" } : {}}
-            src={video.url}
             muted
             loop
             playsInline
             preload="auto"
-            onError={(e) => {
-              // Retry load on error (handles intermittent blob URL failures)
-              const vid = e.currentTarget;
-              setTimeout(() => {
-                vid.load();
-                if (isActive) vid.play().catch(() => {});
-              }, 600);
-            }}
+            x-webkit-airplay="allow"
+            onCanPlay={() => setVideoLoading(false)}
+            onCanPlayThrough={() => setVideoLoading(false)}
+            onLoadedData={() => setVideoLoading(false)}
             onLoadedMetadata={(e) => {
+              setVideoLoading(false);
               // Auto-play once metadata is available if this reel is active
               if (isActive) {
                 e.currentTarget.play().catch(() => {});
               }
             }}
-            onPlay={() => setIsPaused(false)}
+            onError={(e) => {
+              const vid = e.currentTarget;
+              const errCode = vid.error?.code;
+              const errMsg = vid.error?.message;
+              console.warn(
+                `Video error code=${errCode} msg=${errMsg} url=${video.url?.slice(0, 60)}`,
+              );
+              setVideoLoading(false);
+              setVideoUnavailable(true);
+            }}
+            onPlay={() => {
+              setIsPaused(false);
+              setVideoLoading(false);
+            }}
             onPause={() => setIsPaused(true)}
           >
+            {/* For data: or blob: URLs, src is set directly — no <source> tags needed */}
+            {video.url &&
+              !video.url.startsWith("data:") &&
+              !video.url.startsWith("blob:") && (
+                <>
+                  <source src={video.url} type="video/mp4" />
+                  <source src={video.url} type="video/webm" />
+                </>
+              )}
             <track kind="captions" />
           </video>
+
+          {/* Thumbnail overlay — shown until video starts playing */}
+          {video.thumbnail &&
+            videoLoading &&
+            !videoUnavailable &&
+            !isPremiumLocked && (
+              <img
+                src={video.thumbnail}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                style={{ zIndex: 2 }}
+              />
+            )}
+
+          {/* Loading spinner overlay — shown until video can play */}
+          {videoLoading && !isPremiumLocked && !videoUnavailable && (
+            <div className="absolute inset-0 z-[4] flex items-center justify-center bg-black/40 pointer-events-none">
+              <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+            </div>
+          )}
+
+          {/* Video unavailable overlay (dead blob URL) */}
+          {videoUnavailable && (
+            <div className="absolute inset-0 z-[4] flex flex-col items-center justify-center gap-2 bg-black/70 pointer-events-none">
+              <span className="text-3xl">🎬</span>
+              <p className="text-white/60 text-sm font-medium">
+                Video unavailable
+              </p>
+              <p className="text-white/30 text-xs">Try uploading again</p>
+            </div>
+          )}
+
           {/* Tap-to-play overlay */}
           <button
             type="button"
@@ -424,7 +534,7 @@ function ReelCard({
             style={{ background: "transparent" }}
           />
           {/* Paused indicator */}
-          {isPaused && (
+          {isPaused && !videoLoading && !videoUnavailable && (
             <div className="absolute inset-0 z-[6] flex items-center justify-center pointer-events-none">
               <div className="w-16 h-16 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
                 <svg

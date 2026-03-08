@@ -19,11 +19,48 @@ import {
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { ExternalBlob } from "../backend";
 import type { VideoType } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
-import { useActor } from "../hooks/useActor";
 import { generateId } from "../utils/trending";
+import { saveVideoFileToDB } from "../utils/videoDB";
+
+const MAX_VIDEO_SIZE_MB = 100;
+const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
+
+// ─── Thumbnail generator ─────────────────────────────────────────────────────
+
+async function generateThumbnail(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    const url = URL.createObjectURL(file);
+    video.src = url;
+    video.addEventListener("loadeddata", () => {
+      video.currentTime = 0.5;
+    });
+    video.addEventListener("seeked", () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 568;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      } else {
+        resolve("");
+      }
+      URL.revokeObjectURL(url);
+    });
+    video.addEventListener("error", () => {
+      resolve("");
+      URL.revokeObjectURL(url);
+    });
+    // Timeout fallback
+    setTimeout(() => resolve(""), 5000);
+  });
+}
 
 // ─── Video type chip config ───────────────────────────────────────────────────
 
@@ -84,7 +121,6 @@ function formatExpiryDate(ts: number): string {
 
 export default function UploadPage() {
   const { state, dispatch } = useApp();
-  const { actor } = useActor();
   const navigate = useNavigate();
   const user = state.currentUser;
   const subPrice = state.subscriptionPrice ?? 600;
@@ -105,7 +141,7 @@ export default function UploadPage() {
   const showUploadReminder =
     canUpload && daysLeft > 0 && daysLeft <= 30 && !uploadReminderDismissed;
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string>("");
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string>("");
   const [caption, setCaption] = useState("");
   const [hashtagInput, setHashtagInput] = useState("");
   const [hashtags, setHashtags] = useState<string[]>([]);
@@ -116,12 +152,19 @@ export default function UploadPage() {
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith("video/")) {
-      toast.error("Please select a video file");
+      toast.error("Please select a video file (MP4, MOV, AVI, WebM)");
+      return;
+    }
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      toast.error(
+        `Video is too large. Maximum size is ${MAX_VIDEO_SIZE_MB}MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB.`,
+      );
       return;
     }
     setVideoFile(file);
-    const url = URL.createObjectURL(file);
-    setVideoUrl(url);
+    // Use object URL only for preview — NOT for storage
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+    setVideoPreviewUrl(URL.createObjectURL(file));
   };
 
   const handlePhotoSelect = (file: File) => {
@@ -162,7 +205,7 @@ export default function UploadPage() {
 
   const handlePost = async () => {
     if (!state.currentUser) return;
-    if (!videoUrl && !videoFile) {
+    if (!videoFile) {
       toast.error("Please select a video first");
       return;
     }
@@ -172,62 +215,79 @@ export default function UploadPage() {
     }
 
     setUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(5);
 
-    let finalUrl = videoUrl || "https://www.w3schools.com/html/mov_bbb.mp4";
+    try {
+      // Generate thumbnail from first frame
+      const thumbnail = await generateThumbnail(videoFile);
+      setUploadProgress(20);
 
-    // Attempt on-chain blob upload if actor is available and a local file was selected
-    if (actor && videoFile) {
+      // Generate a stable video ID
+      const videoId = generateId();
+
+      // Save video file directly to IndexedDB (avoids base64 memory explosion)
+      // We use "__local__" as the state URL placeholder; IndexedDB holds the actual Blob
       try {
-        const arrayBuffer = await videoFile.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        const blob = ExternalBlob.fromBytes(bytes).withUploadProgress((pct) =>
-          setUploadProgress(Math.round(pct)),
-        );
-        await actor.addContent(BigInt(0), caption.trim(), caption.trim(), blob);
-        finalUrl = blob.getDirectURL();
-        toast.success("📡 Uploaded to ICP chain!");
-      } catch (err) {
-        console.error(
-          "On-chain upload failed, falling back to local URL:",
-          err,
-        );
-        toast.error("On-chain upload failed — saving locally instead");
-        // Fall back to local object URL already set in videoUrl
-        finalUrl = videoUrl || "https://www.w3schools.com/html/mov_bbb.mp4";
+        setUploadProgress(40);
+        await saveVideoFileToDB(videoId, videoFile);
+        setUploadProgress(80);
+      } catch (dbErr) {
+        const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+        toast.error(`Upload failed: ${msg}`);
+        setUploading(false);
+        setUploadProgress(0);
+        return;
       }
-    } else if (!actor && videoFile) {
-      // No actor — simulate upload delay
-      await new Promise((r) => setTimeout(r, 1200));
+
+      // Create a temporary Blob URL for immediate in-session playback
+      const blobUrl = URL.createObjectURL(videoFile);
+      const finalUrl = blobUrl;
+
+      setUploadProgress(100);
+
+      dispatch({
+        type: "UPLOAD_VIDEO",
+        video: {
+          id: videoId,
+          uploaderId: state.currentUser.id,
+          url: finalUrl, // Blob URL — valid for this session
+          thumbnail,
+          caption: caption.trim(),
+          hashtags: hashtags.length > 0 ? hashtags : [selectedType],
+          likesCount: 0,
+          commentsCount: 0,
+          createdAt: Date.now(),
+          isDeleted: false,
+          videoType: selectedType,
+          viewsCount: 0,
+          adImpressions: 0,
+          shareCount: 0,
+        },
+      });
+
+      // Keep the preview URL alive — it's the same Blob URL used in the feed.
+      // We only revoke the preview URL (different from finalUrl if applicable)
+      if (videoPreviewUrl && videoPreviewUrl !== finalUrl) {
+        URL.revokeObjectURL(videoPreviewUrl);
+      }
+
+      setUploading(false);
+      setUploadProgress(0);
+      setVideoFile(null);
+      setVideoPreviewUrl("");
+      setCaption("");
+      setHashtags([]);
+      setSelectedType("reel");
+      toast.success("🎉 Your reel is live!");
+    } catch (unexpectedErr) {
+      const msg =
+        unexpectedErr instanceof Error
+          ? unexpectedErr.message
+          : String(unexpectedErr);
+      toast.error(`Upload failed: ${msg}`);
+      setUploading(false);
+      setUploadProgress(0);
     }
-
-    dispatch({
-      type: "UPLOAD_VIDEO",
-      video: {
-        id: generateId(),
-        uploaderId: state.currentUser.id,
-        url: finalUrl,
-        caption: caption.trim(),
-        hashtags: hashtags.length > 0 ? hashtags : [selectedType],
-        likesCount: 0,
-        commentsCount: 0,
-        createdAt: Date.now(),
-        isDeleted: false,
-        videoType: selectedType,
-        viewsCount: 0,
-        adImpressions: 0,
-        shareCount: 0,
-      },
-    });
-
-    setUploading(false);
-    setUploadProgress(0);
-    setVideoFile(null);
-    setVideoUrl("");
-    setCaption("");
-    setHashtags([]);
-    setSelectedType("reel");
-    toast.success("🎉 Your reel is live!");
   };
 
   const handleSubscribe = async () => {
@@ -240,8 +300,9 @@ export default function UploadPage() {
   };
 
   const handleClear = () => {
+    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
     setVideoFile(null);
-    setVideoUrl("");
+    setVideoPreviewUrl("");
   };
 
   // Derived subscription state
@@ -523,7 +584,7 @@ export default function UploadPage() {
         </div>
 
         {/* Video upload zone */}
-        {!videoUrl ? (
+        {!videoPreviewUrl ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -551,7 +612,7 @@ export default function UploadPage() {
                 or drag and drop here
               </p>
               <p className="text-white/30 text-xs mt-2">
-                MP4, MOV, AVI · Max 60 seconds recommended
+                MP4, MOV, WebM · Max {MAX_VIDEO_SIZE_MB}MB
               </p>
             </div>
             <div className="flex items-center gap-2 bg-reels-pink/20 border border-reels-pink/40 rounded-full px-4 py-2">
@@ -564,11 +625,13 @@ export default function UploadPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="video/*"
+              accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/*"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleFileSelect(file);
+                // Reset input so same file can be re-selected
+                e.target.value = "";
               }}
             />
           </motion.div>
@@ -579,7 +642,7 @@ export default function UploadPage() {
             className="relative rounded-2xl overflow-hidden bg-black"
           >
             <video
-              src={videoUrl}
+              src={videoPreviewUrl}
               className="w-full rounded-2xl"
               style={{ maxHeight: 280, objectFit: "contain" }}
               controls
@@ -805,6 +868,7 @@ export default function UploadPage() {
           onClick={handlePost}
           disabled={
             uploading ||
+            !videoFile ||
             !caption.trim() ||
             (selectedType === "premium" &&
               user?.subscriptionStatus !== "active")

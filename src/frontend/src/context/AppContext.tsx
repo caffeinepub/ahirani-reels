@@ -9,6 +9,7 @@ import {
 import { toast } from "sonner";
 import { GOOGLE_AD_SLOTS, META_AD_SLOTS } from "../components/ads/ads-config";
 import { useActor } from "../hooks/useActor";
+import { getVideoFromDB, saveVideoToDB } from "../utils/videoDB";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -447,7 +448,8 @@ type Action =
   | { type: "APPROVE_ARTIST"; userId: string }
   | { type: "REJECT_ARTIST"; userId: string }
   | { type: "BROADCAST_NOTIFICATION"; message: string }
-  | { type: "SET_SUBSCRIPTION_PRICE"; price: number };
+  | { type: "SET_SUBSCRIPTION_PRICE"; price: number }
+  | { type: "RESTORE_VIDEO_URL"; videoId: string; url: string };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -1253,11 +1255,47 @@ function getInitialState(): AppState {
     const stored = localStorage.getItem("ahirani_state");
     if (stored) {
       const parsed = JSON.parse(stored) as AppState;
+
+      // Restore local videos (data: URLs) from sessionStorage
+      // Support both old format (ahirani_local_videos) and new per-video keys
+      let localVideosMap: Record<string, string> = {};
+      try {
+        // New format: individual keys per video
+        const idsRaw = sessionStorage.getItem("ahirani_local_video_ids");
+        if (idsRaw) {
+          const ids = JSON.parse(idsRaw) as string[];
+          for (const id of ids) {
+            const url = sessionStorage.getItem(`ahirani_vid_${id}`);
+            if (url?.startsWith("data:")) {
+              localVideosMap[id] = url;
+            }
+          }
+        }
+        // Legacy format fallback
+        if (Object.keys(localVideosMap).length === 0) {
+          const localVideosRaw = sessionStorage.getItem("ahirani_local_videos");
+          if (localVideosRaw) {
+            const localVideos = JSON.parse(localVideosRaw) as Video[];
+            for (const v of localVideos) {
+              if (v.url?.startsWith("data:")) {
+                localVideosMap[v.id] = v.url;
+              }
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       // Migration: ensure all videos have videoType and viewsCount
+      // Restore URLs from sessionStorage for __local__ placeholder videos
       const migratedVideos = parsed.videos.map((v) => {
         const seedCfg = SEED_VIDEO_CONFIGS.find((s) => s.id === v.id);
+        const restoredUrl =
+          v.url === "__local__" ? (localVideosMap[v.id] ?? "__local__") : v.url;
         return {
           ...v,
+          url: restoredUrl,
           videoType: v.videoType ?? seedCfg?.videoType ?? "reel",
           viewsCount: v.viewsCount ?? seedCfg?.viewsCount ?? 0,
           adImpressions: v.adImpressions ?? 0,
@@ -3244,6 +3282,14 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_SUBSCRIPTION_PRICE":
       return { ...state, subscriptionPrice: action.price };
 
+    case "RESTORE_VIDEO_URL":
+      return {
+        ...state,
+        videos: state.videos.map((v) =>
+          v.id === action.videoId ? { ...v, url: action.url } : v,
+        ),
+      };
+
     default:
       return state;
   }
@@ -3264,10 +3310,57 @@ function AppProviderInner({ children }: { children: React.ReactNode }) {
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const { actor, isFetching } = useActor();
 
+  // Restore local video URLs from IndexedDB for any __local__ placeholder videos.
+  // getInitialState is synchronous so it cannot use IndexedDB; we do it here async on mount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally fires once on mount
+  useEffect(() => {
+    const localVideoIds = state.videos
+      .filter((v) => v.url === "__local__")
+      .map((v) => v.id);
+
+    if (localVideoIds.length === 0) return;
+
+    (async () => {
+      for (const id of localVideoIds) {
+        const url = await getVideoFromDB(id);
+        // Accept both blob: (from createObjectURL) and data: (legacy base64) URLs
+        if (
+          url &&
+          (url.startsWith("blob:") ||
+            url.startsWith("data:") ||
+            url.startsWith("http"))
+        ) {
+          dispatch({ type: "RESTORE_VIDEO_URL", videoId: id, url });
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
+
   // Persist state to localStorage
+  // Videos with blob: or data: URLs are stored in IndexedDB (large capacity, truly persistent).
+  // localStorage only holds metadata with "__local__" placeholder for those videos.
   useEffect(() => {
     try {
-      localStorage.setItem("ahirani_state", JSON.stringify(state));
+      const videosForLocal = state.videos.map((v) => {
+        if (v.url?.startsWith("data:") || v.url?.startsWith("blob:")) {
+          return { ...v, url: "__local__" };
+        }
+        return v;
+      });
+      localStorage.setItem(
+        "ahirani_state",
+        JSON.stringify({ ...state, videos: videosForLocal }),
+      );
+      // For data: URLs (legacy), save to IndexedDB
+      const dataUrlVideos = state.videos.filter((v) =>
+        v.url?.startsWith("data:"),
+      );
+      for (const v of dataUrlVideos) {
+        saveVideoToDB(v.id, v.url);
+      }
+      // Note: blob: URLs are saved by saveVideoFileToDB in UploadPage/EditVideoPage
+      // They don't need re-saving here — IndexedDB already holds the Blob.
     } catch {
       // ignore quota errors
     }

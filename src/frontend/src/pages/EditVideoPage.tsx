@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import type { MusicTrack, VideoType } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
 import { generateId } from "../utils/trending";
+import { saveVideoToDB } from "../utils/videoDB";
 
 // ─── Filter definitions ───────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export default function EditVideoPage() {
 
   const { state: appState, dispatch } = useApp();
   const fromAdmin = Boolean(routeState.fromAdmin);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Derive video source
   const videoObjectUrl = useMemo(() => {
@@ -184,6 +186,20 @@ export default function EditVideoPage() {
     }
   };
 
+  const captureThumbnail = (): string => {
+    const video = videoRef.current;
+    if (!video) return "";
+    const canvas = document.createElement("canvas");
+    canvas.width = 320;
+    canvas.height = 568;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.7);
+    }
+    return "";
+  };
+
   const handlePost = async () => {
     // Allow admin posts even without currentUser
     if (!fromAdmin && !appState.currentUser) return;
@@ -197,36 +213,74 @@ export default function EditVideoPage() {
     }
 
     setPosting(true);
+    setUploadProgress(5);
 
-    // Simulate brief upload delay
-    await new Promise((r) => setTimeout(r, 800));
+    try {
+      const thumbnail = captureThumbnail();
+      setUploadProgress(20);
 
-    const uploaderId = fromAdmin
-      ? "admin"
-      : (appState.currentUser?.id ?? "admin");
+      const videoId = generateId();
 
-    dispatch({
-      type: "UPLOAD_VIDEO",
-      video: {
-        id: generateId(),
-        uploaderId,
-        url: videoObjectUrl,
-        caption: caption.trim(),
-        hashtags: hashtags.length > 0 ? hashtags : [selectedType],
-        likesCount: 0,
-        commentsCount: 0,
-        createdAt: Date.now(),
-        isDeleted: false,
-        videoType: selectedType,
-        viewsCount: 0,
-        adImpressions: 0,
-        shareCount: 0,
-      },
-    });
+      // Save blob to IndexedDB for persistent storage (avoids base64 memory explosion)
+      try {
+        const response = await fetch(videoObjectUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to read video: HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        setUploadProgress(60);
+        await saveVideoToDB(videoId, blob);
+        setUploadProgress(90);
+      } catch (readErr) {
+        const msg =
+          readErr instanceof Error ? readErr.message : String(readErr);
+        toast.error(`Upload failed: ${msg}`);
+        setPosting(false);
+        setUploadProgress(0);
+        return;
+      }
 
-    setPosting(false);
-    toast.success("Video posted!");
-    navigate({ to: fromAdmin ? "/admin" : "/" });
+      setUploadProgress(100);
+
+      const uploaderId = fromAdmin
+        ? "admin"
+        : (appState.currentUser?.id ?? "admin");
+
+      // Use the existing blob URL for immediate playback (valid for this session)
+      // IndexedDB holds the Blob for persistence across reloads
+      dispatch({
+        type: "UPLOAD_VIDEO",
+        video: {
+          id: videoId,
+          uploaderId,
+          url: videoObjectUrl, // blob: URL — valid for current session
+          thumbnail,
+          caption: caption.trim(),
+          hashtags: hashtags.length > 0 ? hashtags : [selectedType],
+          likesCount: 0,
+          commentsCount: 0,
+          createdAt: Date.now(),
+          isDeleted: false,
+          videoType: selectedType,
+          viewsCount: 0,
+          adImpressions: 0,
+          shareCount: 0,
+        },
+      });
+
+      setPosting(false);
+      setUploadProgress(0);
+      toast.success("Video posted!");
+      navigate({ to: fromAdmin ? "/admin" : "/" });
+    } catch (unexpectedErr) {
+      const msg =
+        unexpectedErr instanceof Error
+          ? unexpectedErr.message
+          : String(unexpectedErr);
+      toast.error(`Upload failed: ${msg}`);
+      setPosting(false);
+      setUploadProgress(0);
+    }
   };
 
   const formatSecs = (s: number) => {
@@ -653,17 +707,28 @@ export default function EditVideoPage() {
           data-ocid="edit.submit_button"
           onClick={handlePost}
           disabled={posting || !caption.trim()}
-          className="w-full h-12 font-bold text-base"
+          className="w-full h-12 font-bold text-base relative overflow-hidden"
           style={{
             background: posting
               ? "oklch(0.3 0.04 15)"
               : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
           }}
         >
+          {/* Progress bar overlay */}
+          {posting && uploadProgress > 0 && (
+            <motion.div
+              className="absolute inset-y-0 left-0 bg-white/20 rounded-lg"
+              initial={{ width: "0%" }}
+              animate={{ width: `${uploadProgress}%` }}
+              transition={{ ease: "linear" }}
+            />
+          )}
           {posting ? (
-            <span className="flex items-center gap-2">
+            <span className="relative flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Posting...
+              {uploadProgress > 0
+                ? `Uploading ${uploadProgress}%`
+                : "Processing..."}
             </span>
           ) : (
             "🚀 Post Reel"
