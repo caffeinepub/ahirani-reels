@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowRight,
@@ -46,6 +46,8 @@ type SocialProvider = "google" | "facebook";
 export default function AuthPage() {
   const { state, dispatch } = useApp();
   const { t } = useLang();
+  const navigate = useNavigate();
+  const logoHoldRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [step, setStep] = useState<Step>("method");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -90,23 +92,6 @@ export default function AuthPage() {
       setReferralCode(refCode.toUpperCase());
     }
   }, []);
-
-  // Long-press logo (10s) → navigate to admin login (hidden entry)
-  const logoLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [logoError, setLogoError] = useState(false);
-
-  const handleLogoPointerDown = () => {
-    logoLongPressTimer.current = setTimeout(() => {
-      window.location.href = "/admin-login";
-    }, 10000); // 10 seconds
-  };
-
-  const handleLogoPointerUp = () => {
-    if (logoLongPressTimer.current) {
-      clearTimeout(logoLongPressTimer.current);
-      logoLongPressTimer.current = null;
-    }
-  };
 
   const startCountdown = () => {
     setCountdown(30);
@@ -446,34 +431,46 @@ export default function AuthPage() {
       >
         <div
           data-ocid="auth.logo"
-          className="relative w-20 h-20 rounded-2xl flex items-center justify-center mb-4 cursor-pointer select-none"
+          className="relative w-20 h-20 rounded-2xl flex items-center justify-center mb-4 select-none"
           onContextMenu={(e) => e.preventDefault()}
-          onPointerDown={handleLogoPointerDown}
-          onPointerUp={handleLogoPointerUp}
-          onPointerLeave={handleLogoPointerUp}
-          onTouchStart={handleLogoPointerDown}
-          onTouchEnd={handleLogoPointerUp}
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
+          onTouchStart={() => {
+            logoHoldRef.current = setTimeout(() => {
+              navigate({ to: "/admin-login", search: { access: "fa2024sm" } });
+            }, 120000);
+          }}
+          onTouchEnd={() => {
+            if (logoHoldRef.current) {
+              clearTimeout(logoHoldRef.current);
+              logoHoldRef.current = null;
+            }
+          }}
+          onMouseDown={() => {
+            logoHoldRef.current = setTimeout(() => {
+              navigate({ to: "/admin-login", search: { access: "fa2024sm" } });
+            }, 120000);
+          }}
+          onMouseUp={() => {
+            if (logoHoldRef.current) {
+              clearTimeout(logoHoldRef.current);
+              logoHoldRef.current = null;
+            }
+          }}
+          onMouseLeave={() => {
+            if (logoHoldRef.current) {
+              clearTimeout(logoHoldRef.current);
+              logoHoldRef.current = null;
+            }
+          }}
         >
-          {logoError ? (
-            <div
-              className="w-full h-full rounded-2xl flex items-center justify-center text-white font-black text-2xl"
-              style={{
-                background:
-                  "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
-              }}
-            >
-              फअ
-            </div>
-          ) : (
-            <img
-              src="/assets/generated/fakt-ahirani-logo-v2.dim_200x200.png"
-              alt="फक्त अहिराणी"
-              className="w-full h-full object-cover rounded-2xl pointer-events-none select-none"
-              draggable={false}
-              onContextMenu={(e) => e.preventDefault()}
-              onError={() => setLogoError(true)}
-            />
-          )}
+          <img
+            src="/assets/generated/fakt-ahirani-logo.dim_512x512.png"
+            alt="फक्त अहिराणी"
+            className="w-full h-full object-cover rounded-2xl pointer-events-none select-none"
+            draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
+          />
         </div>
         <h1 className="font-display text-3xl font-bold text-white tracking-tight">
           फक्त अहिराणी
@@ -1397,6 +1394,76 @@ export default function AuthPage() {
                 </label>
               </div>
 
+              {/* Online Payment Card (only for artists, only if admin set payment info) */}
+              {selectedRole === "artist" && state.adminPaymentSettings && (
+                <div
+                  className="rounded-2xl border border-amber-500/30 p-4 space-y-3"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.65 0.18 60 / 0.12), oklch(0.55 0.22 30 / 0.08))",
+                  }}
+                  data-ocid="auth.payment.card"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">💳</span>
+                    <h3 className="text-white font-semibold text-sm">
+                      ऑनलाईन पेमेंट करा
+                    </h3>
+                  </div>
+                  <p className="text-white/60 text-xs">
+                    Artist subscription साठी खालील UPI किंवा Bank ला payment करा
+                    आणि admin ला screenshot पाठवा.
+                  </p>
+                  {state.adminPaymentSettings.upiId && (
+                    <div className="rounded-xl bg-white/10 border border-white/15 p-3 space-y-1">
+                      <p className="text-white/40 text-[10px] uppercase tracking-wider font-medium">
+                        UPI Payment
+                      </p>
+                      <p className="text-white font-semibold text-sm">
+                        {state.adminPaymentSettings.upiId}
+                      </p>
+                      {state.adminPaymentSettings.upiName && (
+                        <p className="text-white/60 text-xs">
+                          {state.adminPaymentSettings.upiName}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {state.adminPaymentSettings.accountNumber && (
+                    <div className="rounded-xl bg-white/10 border border-white/15 p-3 space-y-1">
+                      <p className="text-white/40 text-[10px] uppercase tracking-wider font-medium">
+                        Bank Transfer
+                      </p>
+                      {state.adminPaymentSettings.bankName && (
+                        <p className="text-white/70 text-xs">
+                          {state.adminPaymentSettings.bankName}
+                        </p>
+                      )}
+                      {state.adminPaymentSettings.accountHolder && (
+                        <p className="text-white text-sm font-semibold">
+                          {state.adminPaymentSettings.accountHolder}
+                        </p>
+                      )}
+                      <p className="text-white/80 text-sm font-mono">
+                        {state.adminPaymentSettings.accountNumber}
+                      </p>
+                      {state.adminPaymentSettings.ifsc && (
+                        <p className="text-white/60 text-xs">
+                          IFSC: {state.adminPaymentSettings.ifsc}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-amber-400/80 text-xs flex items-start gap-1.5">
+                    <span>⚠️</span>
+                    <span>
+                      पेमेंट केल्यावर admin ला screenshot पाठवा. Admin approve केल्यावर
+                      तुमचा Artist account activate होईल.
+                    </span>
+                  </p>
+                </div>
+              )}
+
               {/* Continue button */}
               <Button
                 data-ocid="auth.age_policy_continue_button"
@@ -1486,17 +1553,6 @@ export default function AuthPage() {
           About / आमच्याबद्दल
         </Link>
       </p>
-
-      {/* Admin link */}
-      <div className="text-center mt-4">
-        <a
-          href="/admin-login"
-          data-ocid="auth.admin_link"
-          className="text-white/20 text-xs hover:text-white/40 transition-colors"
-        >
-          Admin
-        </a>
-      </div>
     </div>
   );
 }

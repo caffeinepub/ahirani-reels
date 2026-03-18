@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
+import { sanitizeText } from "../lib/sanitize";
 import { generateId } from "../utils/trending";
 
 // ─── Filter definitions ───────────────────────────────────────────────────────
@@ -116,8 +117,8 @@ export default function EditPhotoPage() {
         id: generateId(),
         uploaderId,
         url: photoObjectUrl,
-        caption: caption.trim(),
-        hashtags: hashtags.length > 0 ? hashtags : ["photo"],
+        caption: sanitizeText(caption),
+        hashtags: hashtags.length > 0 ? hashtags.map(sanitizeText) : ["photo"],
         likesCount: 0,
         commentsCount: 0,
         createdAt: Date.now(),

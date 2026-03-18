@@ -22,7 +22,6 @@ import EditVideoPage from "./pages/EditVideoPage";
 import ExplorePage from "./pages/ExplorePage";
 import FeedPage from "./pages/FeedPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
-import LivePage from "./pages/LivePage";
 import MusicLibraryPage from "./pages/MusicLibraryPage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -56,7 +55,6 @@ function RootComponent() {
   }
 
   // Full-screen camera routes — no BottomNav, no scroll wrapper
-  // These are accessible to both logged-in users and admin (no auth guard needed here)
   if (
     pathname.startsWith("/camera") ||
     pathname.startsWith("/edit-video") ||
@@ -140,12 +138,9 @@ const adminLoginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/admin-login",
   component: AdminLoginPage,
-});
-
-const liveRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/live",
-  component: LivePage,
+  validateSearch: (search: Record<string, unknown>): { access?: string } => ({
+    access: typeof search.access === "string" ? search.access : undefined,
+  }),
 });
 
 const privacyRoute = createRoute({
@@ -223,7 +218,6 @@ const routeTree = rootRoute.addChildren([
   leaderboardRoute,
   adminRoute,
   adminLoginRoute,
-  liveRoute,
   privacyRoute,
   termsRoute,
   contactRoute,

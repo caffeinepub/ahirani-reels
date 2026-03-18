@@ -13,27 +13,6 @@ import { useApp, useBackendConnected } from "../context/AppContext";
 import { useLang } from "../context/LanguageContext";
 import { NotificationBell } from "./NotificationBell";
 
-// ─── Live icon component ──────────────────────────────────────────────────────
-
-function LiveIcon({ isActive }: { isActive: boolean }) {
-  return (
-    <div className="relative flex items-center justify-center w-6 h-6">
-      <span className={`relative flex h-3 w-3 ${isActive ? "" : ""}`}>
-        <span
-          className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-            isActive ? "bg-white" : "bg-red-500"
-          }`}
-        />
-        <span
-          className={`relative inline-flex rounded-full h-3 w-3 ${
-            isActive ? "bg-white" : "bg-red-500"
-          }`}
-        />
-      </span>
-    </div>
-  );
-}
-
 const ALL_NAV_ITEMS = [
   {
     to: "/",
@@ -63,15 +42,6 @@ const ALL_NAV_ITEMS = [
     tKey: "nav.upload",
     ocid: "nav.upload_link",
     artistOnly: true,
-  },
-  {
-    to: "/live",
-    icon: null,
-    label: "Live",
-    tKey: "nav.live",
-    ocid: "nav.live_link",
-    artistOnly: true,
-    isLive: true,
   },
   {
     to: "/leaderboard",
@@ -106,13 +76,6 @@ export default function BottomNav() {
 
   const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => {
     if ("artistOnly" in item && item.artistOnly) {
-      // Only show Live tab for artists with active subscription
-      if ("isLive" in item && item.isLive) {
-        return (
-          currentUser?.role === "artist" &&
-          currentUser?.subscriptionStatus === "active"
-        );
-      }
       return currentUser?.role !== "viewer";
     }
     return true;
@@ -151,7 +114,6 @@ export default function BottomNav() {
         {NAV_ITEMS.map((navItem) => {
           const { to, tKey, ocid } = navItem;
           const Icon = "icon" in navItem ? navItem.icon : null;
-          const isLiveTab = "isLive" in navItem && navItem.isLive;
           const isActive = pathname === to;
           return (
             <Link
@@ -166,9 +128,7 @@ export default function BottomNav() {
                   className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-reels-pink"
                 />
               )}
-              {isLiveTab ? (
-                <LiveIcon isActive={isActive} />
-              ) : to === "/upload" ? (
+              {to === "/upload" ? (
                 <div
                   className={`w-11 h-8 rounded-lg flex items-center justify-center transition-all ${
                     isActive
@@ -189,13 +149,7 @@ export default function BottomNav() {
               )}
               <span
                 className={`text-[10px] font-medium transition-colors ${
-                  isActive
-                    ? isLiveTab
-                      ? "text-white"
-                      : "text-white"
-                    : isLiveTab
-                      ? "text-red-400"
-                      : "text-white/40"
+                  isActive ? "text-white" : "text-white/40"
                 }`}
               >
                 {t(tKey)}

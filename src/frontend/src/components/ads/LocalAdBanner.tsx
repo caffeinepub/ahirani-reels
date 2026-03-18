@@ -41,7 +41,7 @@ export function LocalAdBanner({ ads, className }: LocalAdBannerProps) {
   };
 
   return (
-    <div className={className}>
+    <div className={`${className ?? ""} flex justify-center`}>
       <AnimatePresence mode="wait">
         <motion.button
           key={ad.id}
@@ -62,7 +62,7 @@ export function LocalAdBanner({ ads, className }: LocalAdBannerProps) {
           <img
             src={ad.imageUrl}
             alt={ad.businessName}
-            className="w-full h-28 object-cover"
+            className="w-full h-20 object-cover"
             loading="lazy"
           />
 

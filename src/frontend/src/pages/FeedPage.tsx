@@ -5,6 +5,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useNavigate } from "@tanstack/react-router";
 import {
   Clock,
   Crown,
@@ -33,6 +33,8 @@ import {
   Share2,
   UserCheck,
   UserPlus,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -56,6 +58,7 @@ import {
 } from "../context/AppContext";
 import type { LocalAd, Video, VideoType } from "../context/AppContext";
 import { useLang } from "../context/LanguageContext";
+import { sanitizeText } from "../lib/sanitize";
 import {
   formatCount,
   formatTime,
@@ -131,7 +134,7 @@ function CommentSheet({
         id: generateId(),
         videoId,
         userId: state.currentUser.id,
-        text: text.trim(),
+        text: sanitizeText(text),
         createdAt: Date.now(),
       },
     });
@@ -237,10 +240,18 @@ function ReelCard({
   const [isPaused, setIsPaused] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
   const [videoUnavailable, setVideoUnavailable] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const isFollowing = useIsFollowing(video.uploaderId);
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const ocidIndex = index + 1;
   const isPhoto = video.mediaType === "photo";
+
+  // Sync muted state to video element
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid || isPhoto) return;
+    vid.muted = isMuted;
+  }, [isMuted, isPhoto]);
 
   // Tap-to-play toggle
   const handleVideoTap = () => {
@@ -278,15 +289,15 @@ function ReelCard({
     if (!vid) return;
 
     if (isActive) {
-      // If URL is a placeholder, wait up to 3s for IndexedDB restore before marking unavailable
+      // If URL is a placeholder, wait up to 8s for IndexedDB restore before marking unavailable
       if (!video.url || video.url === "__local__") {
         setVideoLoading(true);
         setVideoUnavailable(false);
         const waitTimer = setTimeout(() => {
-          // Still __local__ after 3 seconds — IndexedDB restore didn't happen
+          // Still __local__ after 8 seconds — IndexedDB restore didn't happen
           setVideoLoading(false);
           setVideoUnavailable(true);
-        }, 3000);
+        }, 8000);
         return () => clearTimeout(waitTimer);
       }
       // Reset loading/unavailable state when card becomes active
@@ -296,14 +307,29 @@ function ReelCard({
       const isBlobOrData =
         video.url.startsWith("data:") || video.url.startsWith("blob:");
 
-      // For data: or blob: URLs, always set src directly (no <source> tags)
+      // Always set src directly for local/data/blob URLs
+      // This ensures the video element picks up the correct source
       if (isBlobOrData) {
         if (vid.src !== video.url) {
           vid.src = video.url;
+          vid.load();
         }
       }
 
       const tryPlay = () => {
+        if (vid.readyState >= 3) {
+          vid
+            .play()
+            .then(() => {
+              setVideoLoading(false);
+              setIsPaused(false);
+            })
+            .catch(() => {
+              setVideoLoading(false);
+              setIsPaused(true);
+            });
+          return;
+        }
         vid
           .play()
           .then(() => {
@@ -312,7 +338,6 @@ function ReelCard({
           })
           .catch((playErr) => {
             console.warn("Video play failed, retrying:", playErr?.message);
-            // Retry after short delay — handles blob/data URLs that need buffering
             setTimeout(() => {
               vid
                 .play()
@@ -321,31 +346,29 @@ function ReelCard({
                   setIsPaused(false);
                 })
                 .catch(() => {
-                  // Final fallback: show play button instead of spinner
                   setVideoLoading(false);
                   setIsPaused(true);
                 });
-            }, 600);
+            }, 800);
           });
       };
 
-      if (vid.readyState === 0 || (isBlobOrData && vid.readyState < 2)) {
-        // Need to load first — use canplay event
-        vid.load();
-        const onCanPlay = () => {
+      if (vid.readyState < 3) {
+        const onReady = () => {
           tryPlay();
           setVideoLoading(false);
-          vid.removeEventListener("canplay", onCanPlay);
-          vid.removeEventListener("canplaythrough", onCanPlay);
+          vid.removeEventListener("canplay", onReady);
+          vid.removeEventListener("canplaythrough", onReady);
         };
-        vid.addEventListener("canplay", onCanPlay);
-        vid.addEventListener("canplaythrough", onCanPlay);
-        // Fallback: try playing after 2000ms even without event
+        vid.addEventListener("canplay", onReady);
+        vid.addEventListener("canplaythrough", onReady);
+        if (!isBlobOrData) vid.load();
+        // Fallback: try playing after 2500ms
         seenTimerRef.current = setTimeout(() => {
-          vid.removeEventListener("canplay", onCanPlay);
-          vid.removeEventListener("canplaythrough", onCanPlay);
+          vid.removeEventListener("canplay", onReady);
+          vid.removeEventListener("canplaythrough", onReady);
           tryPlay();
-        }, 2000);
+        }, 2500);
       } else {
         tryPlay();
         seenTimerRef.current = setTimeout(() => onSeen(video.id), 2000);
@@ -451,7 +474,7 @@ function ReelCard({
             poster={video.thumbnail || undefined}
             className={`absolute inset-0 w-full h-full object-cover ${isPremiumLocked ? "blur" : ""}`}
             style={isPremiumLocked ? { filter: "blur(4px)" } : {}}
-            muted
+            muted={isMuted}
             loop
             playsInline
             preload="auto"
@@ -461,9 +484,16 @@ function ReelCard({
             onLoadedData={() => setVideoLoading(false)}
             onLoadedMetadata={(e) => {
               setVideoLoading(false);
+              const vid = e.currentTarget;
+              // Apply editing metadata
+              if (video.speed && video.speed !== 1)
+                vid.playbackRate = video.speed;
+              if (video.volume !== undefined) vid.volume = video.volume;
+              if (video.trimStart && video.trimStart > 0)
+                vid.currentTime = video.trimStart;
               // Auto-play once metadata is available if this reel is active
               if (isActive) {
-                e.currentTarget.play().catch(() => {});
+                vid.play().catch(() => {});
               }
             }}
             onError={(e) => {
@@ -493,6 +523,32 @@ function ReelCard({
               )}
             <track kind="captions" />
           </video>
+
+          {/* Text overlay from editor */}
+          {video.overlayText && (
+            <div
+              className={`absolute left-0 right-0 px-4 text-center pointer-events-none z-10 ${
+                video.textPosition === "top"
+                  ? "top-16"
+                  : video.textPosition === "bottom"
+                    ? "bottom-32"
+                    : "top-1/2 -translate-y-1/2"
+              }`}
+            >
+              <span
+                className={`text-white font-bold drop-shadow-lg ${
+                  video.textSize === "small"
+                    ? "text-sm"
+                    : video.textSize === "large"
+                      ? "text-3xl"
+                      : "text-xl"
+                }`}
+                style={{ textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}
+              >
+                {video.overlayText}
+              </span>
+            </div>
+          )}
 
           {/* Thumbnail overlay — shown until video starts playing */}
           {video.thumbnail &&
@@ -628,6 +684,29 @@ function ReelCard({
           mediaType={video.mediaType}
         />
       </div>
+
+      {/* Speaker / Sound toggle button (visible on video) */}
+      {!isPhoto && (
+        <button
+          type="button"
+          aria-label={isMuted ? "Sound On" : "Mute"}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsMuted((prev) => {
+              const next = !prev;
+              if (videoRef.current) videoRef.current.muted = next;
+              return next;
+            });
+          }}
+          className="absolute top-14 right-3 z-10 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm border border-white/10"
+        >
+          {isMuted ? (
+            <VolumeX className="w-4 h-4 text-white/80" />
+          ) : (
+            <Volume2 className="w-4 h-4 text-white" />
+          )}
+        </button>
+      )}
 
       {/* Report "..." button */}
       <div className="absolute top-3 right-3 z-10">
@@ -1340,7 +1419,6 @@ type FeedTab = "foryou" | "trending" | "long" | "premium" | "following";
 
 export default function FeedPage() {
   const { state, dispatch } = useApp();
-  const navigate = useNavigate();
   const { t } = useLang();
   const [activeIndex, setActiveIndex] = useState(0);
   const [showAd, setShowAd] = useState(false);
@@ -1362,11 +1440,6 @@ export default function FeedPage() {
     }, 10_800_000);
     return () => clearInterval(interval);
   }, []);
-
-  const activeLiveStreams = state.liveStreams.filter((s) => s.isActive);
-  const isArtistWithActiveSub =
-    state.currentUser?.role === "artist" &&
-    state.currentUser?.subscriptionStatus === "active";
 
   const feedRaw = getTrendingFeed(
     state.videos,
@@ -1617,107 +1690,6 @@ export default function FeedPage() {
             transition={{ duration: 0.2 }}
             className="w-full h-full"
           >
-            {/* Local ad banner + LIVE NOW section + Go Live button */}
-            <div className="absolute top-12 left-0 right-0 z-20 pointer-events-auto space-y-1">
-              {/* LIVE NOW section */}
-              {activeLiveStreams.length > 0 && (
-                <div className="px-4 pt-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-                    </span>
-                    <span className="text-red-400 font-bold text-xs tracking-widest uppercase">
-                      Live Now
-                    </span>
-                  </div>
-                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-                    {activeLiveStreams.map((stream) => {
-                      const artist = state.users.find(
-                        (u) => u.id === stream.artistId,
-                      );
-                      return (
-                        <button
-                          key={stream.id}
-                          type="button"
-                          data-ocid={"feed.live.button"}
-                          onClick={() =>
-                            navigate({
-                              to: "/live",
-                              search: { streamId: stream.id } as Record<
-                                string,
-                                string
-                              >,
-                            })
-                          }
-                          className="flex flex-col items-center gap-1 flex-shrink-0 active:scale-95 transition-transform"
-                        >
-                          <div className="relative">
-                            <div
-                              className="w-14 h-14 rounded-full overflow-hidden border-2 border-red-500"
-                              style={{
-                                boxShadow: "0 0 0 2px oklch(0.5 0.25 15 / 0.5)",
-                              }}
-                            >
-                              {artist?.avatar ? (
-                                <img
-                                  src={artist.avatar}
-                                  alt={artist.username}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-white/10 flex items-center justify-center text-white font-bold text-lg">
-                                  {artist?.username?.[0]?.toUpperCase() ?? "A"}
-                                </div>
-                              )}
-                            </div>
-                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2">
-                              <Badge className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0 border-0">
-                                LIVE
-                              </Badge>
-                            </div>
-                          </div>
-                          <span className="text-white/70 text-[10px] font-medium max-w-[56px] truncate">
-                            @{artist?.username ?? "artist"}
-                          </span>
-                          <span className="text-white/40 text-[9px]">
-                            👁 {stream.viewerCount.toLocaleString()}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Go Live button for artists */}
-              {isArtistWithActiveSub && (
-                <div className="px-4 pt-1 pb-1 flex justify-end">
-                  <button
-                    type="button"
-                    data-ocid="feed.go_live.button"
-                    onClick={() => navigate({ to: "/live" })}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-xs text-white transition-all active:scale-95"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, oklch(0.5 0.25 15), oklch(0.45 0.22 5))",
-                    }}
-                  >
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
-                    </span>
-                    Go Live
-                  </button>
-                </div>
-              )}
-
-              {/* Local ad banner */}
-              <div className="px-4 pb-1">
-                <LocalAdBanner ads={localAds} />
-              </div>
-            </div>
-
             <div ref={feedRef} className="feed-container h-full">
               {feed.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center gap-3">
@@ -1739,6 +1711,10 @@ export default function FeedPage() {
 
             {/* Banner ad strip at bottom */}
             <BannerAd className="absolute bottom-16 left-0 right-0 z-20 pointer-events-none mx-3 mb-1" />
+            {/* Local ad banner at bottom */}
+            <div className="absolute bottom-20 left-0 right-0 z-20 px-3">
+              <LocalAdBanner ads={localAds} />
+            </div>
           </motion.div>
         )}
 

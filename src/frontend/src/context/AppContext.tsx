@@ -56,6 +56,20 @@ export interface WithdrawalRequest {
   bankAccountHolder?: string;
 }
 
+export interface AdminWithdrawal {
+  id: string;
+  method: "upi" | "bank";
+  fullName: string;
+  upiId?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+  amount: number;
+  status: "pending" | "paid";
+  createdAt: number;
+  note?: string;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -142,6 +156,13 @@ export interface Video {
   mediaType?: "video" | "photo"; // optional; defaults to "video" for existing content
   isFeatured?: boolean;
   category?: string; // e.g. "Comedy", "Music", "Dance", "Short Films", "Ahirani Culture"
+  speed?: number; // playback rate: 0.5, 1, 1.5, 2
+  volume?: number; // 0-1
+  trimStart?: number; // seconds
+  trimEnd?: number; // seconds
+  overlayText?: string;
+  textSize?: "small" | "medium" | "large";
+  textPosition?: "top" | "center" | "bottom";
 }
 
 export interface Comment {
@@ -334,6 +355,15 @@ export interface VideoEarnings {
   adminEarnings: number;
 }
 
+export interface AdminPaymentSettings {
+  upiId: string;
+  upiName: string;
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  ifsc: string;
+}
+
 export interface AppState {
   currentUser: User | null;
   users: User[];
@@ -358,6 +388,8 @@ export interface AppState {
   adUnitIds: AdUnitIds;
   musicTracks: MusicTrack[];
   subscriptionPrice: number;
+  adminPaymentSettings: AdminPaymentSettings | null;
+  adminWithdrawals: AdminWithdrawal[];
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -449,7 +481,10 @@ type Action =
   | { type: "REJECT_ARTIST"; userId: string }
   | { type: "BROADCAST_NOTIFICATION"; message: string }
   | { type: "SET_SUBSCRIPTION_PRICE"; price: number }
-  | { type: "RESTORE_VIDEO_URL"; videoId: string; url: string };
+  | { type: "RESTORE_VIDEO_URL"; videoId: string; url: string }
+  | { type: "SET_ADMIN_PAYMENT_SETTINGS"; settings: AdminPaymentSettings }
+  | { type: "ADD_ADMIN_WITHDRAWAL"; withdrawal: AdminWithdrawal }
+  | { type: "MARK_ADMIN_WITHDRAWAL_PAID"; id: string };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -1365,6 +1400,24 @@ function getInitialState(): AppState {
         },
         musicTracks: parsed.musicTracks ?? SEED_MUSIC_TRACKS,
         subscriptionPrice: parsed.subscriptionPrice ?? 600,
+        adminPaymentSettings: (() => {
+          try {
+            const s = localStorage.getItem("adminPaymentSettings");
+            return s ? JSON.parse(s) : null;
+          } catch {
+            return null;
+          }
+        })(),
+        adminWithdrawals:
+          parsed.adminWithdrawals ??
+          (() => {
+            try {
+              const s = localStorage.getItem("adminWithdrawals");
+              return s ? JSON.parse(s) : [];
+            } catch {
+              return [];
+            }
+          })(),
       };
     }
   } catch {
@@ -1396,6 +1449,22 @@ function getInitialState(): AppState {
     },
     musicTracks: SEED_MUSIC_TRACKS,
     subscriptionPrice: 600,
+    adminPaymentSettings: (() => {
+      try {
+        const s = localStorage.getItem("adminPaymentSettings");
+        return s ? JSON.parse(s) : null;
+      } catch {
+        return null;
+      }
+    })(),
+    adminWithdrawals: (() => {
+      try {
+        const s = localStorage.getItem("adminWithdrawals");
+        return s ? JSON.parse(s) : [];
+      } catch {
+        return [];
+      }
+    })(),
   };
 }
 
@@ -3282,6 +3351,28 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_SUBSCRIPTION_PRICE":
       return { ...state, subscriptionPrice: action.price };
 
+    case "SET_ADMIN_PAYMENT_SETTINGS": {
+      localStorage.setItem(
+        "adminPaymentSettings",
+        JSON.stringify(action.settings),
+      );
+      return { ...state, adminPaymentSettings: action.settings };
+    }
+
+    case "ADD_ADMIN_WITHDRAWAL": {
+      const updated = [action.withdrawal, ...state.adminWithdrawals];
+      localStorage.setItem("adminWithdrawals", JSON.stringify(updated));
+      return { ...state, adminWithdrawals: updated };
+    }
+
+    case "MARK_ADMIN_WITHDRAWAL_PAID": {
+      const updated = state.adminWithdrawals.map((w) =>
+        w.id === action.id ? { ...w, status: "paid" as const } : w,
+      );
+      localStorage.setItem("adminWithdrawals", JSON.stringify(updated));
+      return { ...state, adminWithdrawals: updated };
+    }
+
     case "RESTORE_VIDEO_URL":
       return {
         ...state,
@@ -3338,31 +3429,45 @@ function AppProviderInner({ children }: { children: React.ReactNode }) {
   }, []); // run once on mount
 
   // Persist state to localStorage
-  // Videos with blob: or data: URLs are stored in IndexedDB (large capacity, truly persistent).
-  // localStorage only holds metadata with "__local__" placeholder for those videos.
+  // data: URLs are persistent strings — store them directly in localStorage state.
+  // blob: URLs die on reload — replace with "__local__" and rely on IndexedDB restore.
   useEffect(() => {
     try {
       const videosForLocal = state.videos.map((v) => {
-        if (v.url?.startsWith("data:") || v.url?.startsWith("blob:")) {
+        // blob: URLs are session-only — replace with placeholder
+        if (v.url?.startsWith("blob:")) {
           return { ...v, url: "__local__" };
         }
+        // data: URLs are persistent strings — keep as-is in localStorage
         return v;
       });
       localStorage.setItem(
         "ahirani_state",
         JSON.stringify({ ...state, videos: videosForLocal }),
       );
-      // For data: URLs (legacy), save to IndexedDB
-      const dataUrlVideos = state.videos.filter((v) =>
-        v.url?.startsWith("data:"),
-      );
-      for (const v of dataUrlVideos) {
-        saveVideoToDB(v.id, v.url);
+    } catch (_e) {
+      // localStorage quota exceeded — try saving without video data: URLs
+      try {
+        const videosForLocal = state.videos.map((v) => {
+          if (v.url?.startsWith("data:") || v.url?.startsWith("blob:")) {
+            return { ...v, url: "__local__" };
+          }
+          return v;
+        });
+        // Save data: URLs to IndexedDB as fallback
+        const dataUrlVideos = state.videos.filter((v) =>
+          v.url?.startsWith("data:"),
+        );
+        for (const v of dataUrlVideos) {
+          saveVideoToDB(v.id, v.url);
+        }
+        localStorage.setItem(
+          "ahirani_state",
+          JSON.stringify({ ...state, videos: videosForLocal }),
+        );
+      } catch {
+        // ignore if still failing
       }
-      // Note: blob: URLs are saved by saveVideoFileToDB in UploadPage/EditVideoPage
-      // They don't need re-saving here — IndexedDB already holds the Blob.
-    } catch {
-      // ignore quota errors
     }
   }, [state]);
 

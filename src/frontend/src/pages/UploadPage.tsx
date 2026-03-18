@@ -21,10 +21,11 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { VideoType } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
+import { sanitizeText } from "../lib/sanitize";
 import { generateId } from "../utils/trending";
 import { saveVideoFileToDB } from "../utils/videoDB";
 
-const MAX_VIDEO_SIZE_MB = 100;
+const MAX_VIDEO_SIZE_MB = 400;
 const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024;
 
 // ─── Thumbnail generator ─────────────────────────────────────────────────────
@@ -225,12 +226,13 @@ export default function UploadPage() {
       // Generate a stable video ID
       const videoId = generateId();
 
-      // Save video file directly to IndexedDB (avoids base64 memory explosion)
-      // We use "__local__" as the state URL placeholder; IndexedDB holds the actual Blob
+      // Save video File directly to IndexedDB as Blob (no base64 conversion).
+      // base64 conversion doubles file size and fails on mobile for large videos.
+      // We use URL.createObjectURL for the current session URL; on reload, AppContext
+      // restores a fresh Blob URL from IndexedDB.
+      setUploadProgress(40);
       try {
-        setUploadProgress(40);
         await saveVideoFileToDB(videoId, videoFile);
-        setUploadProgress(80);
       } catch (dbErr) {
         const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
         toast.error(`Upload failed: ${msg}`);
@@ -238,10 +240,8 @@ export default function UploadPage() {
         setUploadProgress(0);
         return;
       }
-
-      // Create a temporary Blob URL for immediate in-session playback
-      const blobUrl = URL.createObjectURL(videoFile);
-      const finalUrl = blobUrl;
+      setUploadProgress(80);
+      const finalUrl = URL.createObjectURL(videoFile);
 
       setUploadProgress(100);
 
@@ -252,8 +252,9 @@ export default function UploadPage() {
           uploaderId: state.currentUser.id,
           url: finalUrl, // Blob URL — valid for this session
           thumbnail,
-          caption: caption.trim(),
-          hashtags: hashtags.length > 0 ? hashtags : [selectedType],
+          caption: sanitizeText(caption),
+          hashtags:
+            hashtags.length > 0 ? hashtags.map(sanitizeText) : [selectedType],
           likesCount: 0,
           commentsCount: 0,
           createdAt: Date.now(),
@@ -265,9 +266,8 @@ export default function UploadPage() {
         },
       });
 
-      // Keep the preview URL alive — it's the same Blob URL used in the feed.
-      // We only revoke the preview URL (different from finalUrl if applicable)
-      if (videoPreviewUrl && videoPreviewUrl !== finalUrl) {
+      // Revoke the preview blob URL (different from finalUrl which is a data: URL)
+      if (videoPreviewUrl) {
         URL.revokeObjectURL(videoPreviewUrl);
       }
 

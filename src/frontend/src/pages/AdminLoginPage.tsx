@@ -1,21 +1,34 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Lock, Mail, Shield } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const ADMIN_EMAIL = "admin@faktahirani.app";
 const ADMIN_PASSWORD = "ssm";
 const ADMIN_NAME = "समाधान माळी";
+const SECRET_TOKEN = "fa2024sm";
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
+  const search = useSearch({ from: "/admin-login" }) as { access?: string };
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [allowed, setAllowed] = useState(false);
+
+  useEffect(() => {
+    // Check secret token
+    if (search?.access === SECRET_TOKEN) {
+      setAllowed(true);
+    } else {
+      // No token or wrong token — redirect to home silently
+      navigate({ to: "/" });
+    }
+  }, [search, navigate]);
 
   const handleLogin = async () => {
     setError("");
@@ -35,6 +48,8 @@ export default function AdminLoginPage() {
       setError("Invalid email or password");
     }
   };
+
+  if (!allowed) return null;
 
   return (
     <div
@@ -183,16 +198,6 @@ export default function AdminLoginPage() {
             )}
           </Button>
         </div>
-
-        {/* Back link */}
-        <p className="text-center mt-5">
-          <a
-            href="/"
-            className="text-white/20 text-xs hover:text-white/40 transition-colors"
-          >
-            ← Back to App
-          </a>
-        </p>
       </motion.div>
     </div>
   );

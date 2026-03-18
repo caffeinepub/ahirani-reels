@@ -11,7 +11,6 @@ import {
   Music,
   Pause,
   Play,
-  Scissors,
   Type,
   X,
 } from "lucide-react";
@@ -20,8 +19,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { MusicTrack, VideoType } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
+import { sanitizeText } from "../lib/sanitize";
 import { generateId } from "../utils/trending";
-import { saveVideoToDB } from "../utils/videoDB";
+import { saveVideoFileToDB } from "../utils/videoDB";
 
 // ─── Filter definitions ───────────────────────────────────────────────────────
 
@@ -66,6 +66,16 @@ const VIDEO_TYPES: Array<{
   },
 ];
 
+type EditTab = "trim" | "filters" | "text" | "speed" | "volume";
+
+const EDIT_TABS: Array<{ id: EditTab; label: string; icon: string }> = [
+  { id: "trim", label: "Trim", icon: "✂️" },
+  { id: "filters", label: "Filters", icon: "🎨" },
+  { id: "text", label: "Text", icon: "💬" },
+  { id: "speed", label: "Speed", icon: "⚡" },
+  { id: "volume", label: "Volume", icon: "🔊" },
+];
+
 // ─── Route state type ─────────────────────────────────────────────────────────
 
 interface EditVideoRouteState {
@@ -99,19 +109,17 @@ export default function EditVideoPage() {
     return "";
   }, [routeState.videoBlob, routeState.videoFile]);
 
-  // NOTE: We intentionally do NOT revoke the object URL on unmount.
-  // The blob URL is stored as the video's `url` in app state and must remain
-  // valid so the feed can play it back. Revoking it here would break playback.
-
   // Video player state
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
 
+  // Active editing tab
+  const [activeTab, setActiveTab] = useState<EditTab>("trim");
+
   // Editing state
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(60);
-  const [slowMo, setSlowMo] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<FilterName>("normal");
   const [caption, setCaption] = useState("");
   const [hashtagInput, setHashtagInput] = useState("");
@@ -119,17 +127,27 @@ export default function EditVideoPage() {
   const [selectedType, setSelectedType] = useState<VideoType>("reel");
   const [posting, setPosting] = useState(false);
 
+  // New editing state
+  const [overlayText, setOverlayText] = useState("");
+  const [textSize, setTextSize] = useState<"small" | "medium" | "large">(
+    "medium",
+  );
+  const [textPosition, setTextPosition] = useState<"top" | "center" | "bottom">(
+    "center",
+  );
+  const [speed, setSpeed] = useState(1);
+  const [volume, setVolume] = useState(100);
+
   // Apply filter to video
   const filterCss = FILTERS.find((f) => f.name === selectedFilter)?.css ?? "";
 
-  // Handle video metadata — videoObjectUrl changes when source changes
+  // Handle video metadata
   // biome-ignore lint/correctness/useExhaustiveDependencies: videoObjectUrl triggers re-attach
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const onLoaded = () => {
-      // Allow up to 60s; if browser reports Infinity (e.g. some webm blobs) use 60
       const rawDur = video.duration;
       const dur =
         Number.isFinite(rawDur) && rawDur > 0 ? Math.min(rawDur, 60) : 60;
@@ -139,7 +157,6 @@ export default function EditVideoPage() {
 
     video.addEventListener("loadedmetadata", onLoaded);
     video.addEventListener("loadeddata", onLoaded);
-    // Trigger load for blob URLs
     video.load();
 
     return () => {
@@ -148,12 +165,19 @@ export default function EditVideoPage() {
     };
   }, [videoObjectUrl]);
 
-  // Apply slow-mo playback rate
+  // Apply speed to video
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.playbackRate = slowMo ? 0.5 : 1.0;
+      videoRef.current.playbackRate = speed;
     }
-  }, [slowMo]);
+  }, [speed]);
+
+  // Apply volume to video
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = volume / 100;
+    }
+  }, [volume]);
 
   const handlePlayPause = () => {
     const video = videoRef.current;
@@ -201,7 +225,6 @@ export default function EditVideoPage() {
   };
 
   const handlePost = async () => {
-    // Allow admin posts even without currentUser
     if (!fromAdmin && !appState.currentUser) return;
     if (!caption.trim()) {
       toast.error("Add a caption for your reel");
@@ -221,16 +244,19 @@ export default function EditVideoPage() {
 
       const videoId = generateId();
 
-      // Save blob to IndexedDB for persistent storage (avoids base64 memory explosion)
+      let finalVideoUrl: string;
       try {
         const response = await fetch(videoObjectUrl);
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error(`Failed to read video: HTTP ${response.status}`);
-        }
         const blob = await response.blob();
-        setUploadProgress(60);
-        await saveVideoToDB(videoId, blob);
+        setUploadProgress(50);
+        const videoFile = new File([blob], "reel.mp4", {
+          type: blob.type || "video/mp4",
+        });
+        await saveVideoFileToDB(videoId, videoFile);
         setUploadProgress(90);
+        finalVideoUrl = URL.createObjectURL(blob);
       } catch (readErr) {
         const msg =
           readErr instanceof Error ? readErr.message : String(readErr);
@@ -246,17 +272,16 @@ export default function EditVideoPage() {
         ? "admin"
         : (appState.currentUser?.id ?? "admin");
 
-      // Use the existing blob URL for immediate playback (valid for this session)
-      // IndexedDB holds the Blob for persistence across reloads
       dispatch({
         type: "UPLOAD_VIDEO",
         video: {
           id: videoId,
           uploaderId,
-          url: videoObjectUrl, // blob: URL — valid for current session
+          url: finalVideoUrl,
           thumbnail,
-          caption: caption.trim(),
-          hashtags: hashtags.length > 0 ? hashtags : [selectedType],
+          caption: sanitizeText(caption),
+          hashtags:
+            hashtags.length > 0 ? hashtags.map(sanitizeText) : [selectedType],
           likesCount: 0,
           commentsCount: 0,
           createdAt: Date.now(),
@@ -265,6 +290,15 @@ export default function EditVideoPage() {
           viewsCount: 0,
           adImpressions: 0,
           shareCount: 0,
+          // New editing metadata
+          speed: speed !== 1 ? speed : undefined,
+          volume: volume !== 100 ? volume / 100 : undefined,
+          trimStart: trimStart > 0 ? trimStart : undefined,
+          trimEnd: trimEnd < duration ? trimEnd : undefined,
+          overlayText: overlayText.trim() || undefined,
+          textSize: overlayText.trim() ? textSize : undefined,
+          textPosition: overlayText.trim() ? textPosition : undefined,
+          category: selectedFilter !== "normal" ? selectedFilter : undefined,
         },
       });
 
@@ -289,12 +323,24 @@ export default function EditVideoPage() {
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
+  const textSizeClass = {
+    small: "text-sm",
+    medium: "text-xl",
+    large: "text-3xl",
+  }[textSize];
+
+  const textPositionClass = {
+    top: "top-4",
+    center: "top-1/2 -translate-y-1/2",
+    bottom: "bottom-4",
+  }[textPosition];
+
   // ─── No video fallback ───────────────────────────────────────────────────────
 
   if (!videoObjectUrl) {
     return (
       <div className="h-full overflow-y-auto bg-background flex flex-col items-center justify-center px-6 text-center gap-4">
-        <Scissors className="w-12 h-12 text-white/20" />
+        <span className="text-5xl">✂️</span>
         <h2 className="text-white font-bold text-lg">No video to edit</h2>
         <p className="text-white/50 text-sm">
           Record a video or select one from your gallery first.
@@ -368,6 +414,20 @@ export default function EditVideoPage() {
             <track kind="captions" />
           </video>
 
+          {/* Text overlay */}
+          {overlayText && (
+            <div
+              className={`absolute left-0 right-0 px-4 text-center pointer-events-none ${textPositionClass}`}
+            >
+              <span
+                className={`text-white font-bold drop-shadow-lg ${textSizeClass}`}
+                style={{ textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}
+              >
+                {overlayText}
+              </span>
+            </div>
+          )}
+
           {/* Play/Pause overlay */}
           <button
             type="button"
@@ -387,146 +447,350 @@ export default function EditVideoPage() {
             </div>
           </button>
 
-          {/* Slow-mo badge */}
-          {slowMo && (
+          {/* Speed badge */}
+          {speed !== 1 && (
             <div className="absolute top-2 left-2">
               <Badge className="bg-purple-600/80 text-white text-xs border-0">
-                0.5× Slow-Mo
+                {speed}× Speed
+              </Badge>
+            </div>
+          )}
+
+          {/* Filter badge */}
+          {selectedFilter !== "normal" && (
+            <div className="absolute top-2 right-2">
+              <Badge className="bg-black/60 text-white text-xs border-0">
+                {FILTERS.find((f) => f.name === selectedFilter)?.label}
               </Badge>
             </div>
           )}
         </motion.div>
 
-        {/* ── Trim controls ── */}
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Scissors className="w-4 h-4 text-white/50" />
-            <h3 className="text-sm font-semibold text-white/80">Trim</h3>
-            <span className="ml-auto text-xs text-white/40 tabular-nums">
-              {formatSecs(trimStart)} – {formatSecs(trimEnd)}
-              {duration > 0 && (
-                <span className="text-white/30"> / {formatSecs(duration)}</span>
-              )}
-            </span>
-          </div>
-
-          <div className="space-y-2 px-1">
-            <div className="space-y-1">
-              <span className="text-xs text-white/50">Start</span>
-              <input
-                type="range"
-                id="trim-start-input"
-                data-ocid="edit.trim_start.input"
-                min={0}
-                max={duration || 60}
-                step={0.1}
-                value={trimStart}
-                onChange={(e) => {
-                  const v = Number.parseFloat(e.target.value);
-                  setTrimStart(Math.min(v, trimEnd - 0.5));
-                  if (videoRef.current) videoRef.current.currentTime = v;
-                }}
-                className="w-full accent-white h-1 rounded-full bg-white/20 cursor-pointer"
-              />
-            </div>
-            <div className="space-y-1">
-              <span className="text-xs text-white/50">End</span>
-              <input
-                type="range"
-                id="trim-end-input"
-                data-ocid="edit.trim_end.input"
-                min={0}
-                max={duration || 60}
-                step={0.1}
-                value={trimEnd}
-                onChange={(e) => {
-                  const v = Number.parseFloat(e.target.value);
-                  setTrimEnd(Math.max(v, trimStart + 0.5));
-                }}
-                className="w-full accent-white h-1 rounded-full bg-white/20 cursor-pointer"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* ── Slow motion toggle ── */}
-        <section>
-          <button
-            type="button"
-            data-ocid="edit.slowmo.toggle"
-            onClick={() => setSlowMo((s) => !s)}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl border transition-all ${
-              slowMo
-                ? "bg-purple-600/20 border-purple-500/50 text-white"
-                : "bg-white/5 border-white/10 text-white/60"
-            }`}
-          >
-            <span className="text-lg">{slowMo ? "🐢" : "🏃"}</span>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-semibold">
-                {slowMo ? "0.5× Slow-Mo" : "1× Normal Speed"}
-              </p>
-              <p className="text-xs opacity-60">
-                {slowMo
-                  ? "Tap to restore normal speed"
-                  : "Tap to enable slow motion"}
-              </p>
-            </div>
-            <div
-              className={`w-10 h-6 rounded-full transition-all relative ${
-                slowMo ? "bg-purple-500" : "bg-white/20"
+        {/* ── Edit Tabs ── */}
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide pb-1">
+          {EDIT_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              data-ocid={`edit.${tab.id}.tab`}
+              onClick={() => setActiveTab(tab.id)}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === tab.id
+                  ? "text-white"
+                  : "bg-white/5 border border-white/10 text-white/50"
               }`}
+              style={
+                activeTab === tab.id
+                  ? { background: "oklch(0.65 0.28 15)" }
+                  : {}
+              }
             >
-              <div
-                className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${
-                  slowMo ? "left-5" : "left-1"
-                }`}
-              />
-            </div>
-          </button>
-        </section>
+              <span>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-        {/* ── Filter selector ── */}
-        <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-white/80">Filter</h3>
-          <div
-            data-ocid="edit.filter.tab"
-            className="flex gap-2 overflow-x-auto scrollbar-hide pb-1"
-          >
-            {FILTERS.map((f) => (
-              <button
-                key={f.name}
-                type="button"
-                onClick={() => setSelectedFilter(f.name)}
-                className="shrink-0 flex flex-col items-center gap-1 active:scale-95 transition-transform"
-              >
-                <div
-                  className={`w-14 h-14 rounded-xl overflow-hidden ring-2 transition-all ${
-                    selectedFilter === f.name
-                      ? "ring-white scale-105"
-                      : "ring-transparent"
-                  }`}
-                >
-                  <div
-                    className="w-full h-full"
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(135deg, #ff6b6b 0%, #ffd93d 50%, #6c5ce7 100%)",
-                      filter: f.css || "none",
+        {/* ── Tab Content ── */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          {/* TRIM TAB */}
+          {activeTab === "trim" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">
+                  ✂️ Trim Video
+                </h3>
+                <span className="text-xs text-white/50 tabular-nums font-mono">
+                  {formatSecs(trimStart)} – {formatSecs(trimEnd)}
+                  {duration > 0 && (
+                    <span className="text-white/30">
+                      {" "}
+                      / {formatSecs(duration)}
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-xs text-white/60">Start</span>
+                    <span className="text-xs text-white/40 font-mono">
+                      {formatSecs(trimStart)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    data-ocid="edit.trim_start.input"
+                    min={0}
+                    max={duration || 60}
+                    step={0.1}
+                    value={trimStart}
+                    onChange={(e) => {
+                      const v = Number.parseFloat(e.target.value);
+                      setTrimStart(Math.min(v, trimEnd - 0.5));
+                      if (videoRef.current) videoRef.current.currentTime = v;
                     }}
+                    className="w-full accent-white h-1.5 rounded-full bg-white/20 cursor-pointer"
                   />
                 </div>
-                <span
-                  className={`text-[10px] font-medium ${
-                    selectedFilter === f.name ? "text-white" : "text-white/50"
-                  }`}
-                >
-                  {f.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-xs text-white/60">End</span>
+                    <span className="text-xs text-white/40 font-mono">
+                      {formatSecs(trimEnd)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    data-ocid="edit.trim_end.input"
+                    min={0}
+                    max={duration || 60}
+                    step={0.1}
+                    value={trimEnd}
+                    onChange={(e) => {
+                      const v = Number.parseFloat(e.target.value);
+                      setTrimEnd(Math.max(v, trimStart + 0.5));
+                    }}
+                    className="w-full accent-white h-1.5 rounded-full bg-white/20 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Trim duration display */}
+              <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                <p className="text-white/40 text-xs">Duration after trim</p>
+                <p className="text-white font-bold font-mono">
+                  {formatSecs(Math.max(0, trimEnd - trimStart))}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* FILTERS TAB */}
+          {activeTab === "filters" && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-white">🎨 Filters</h3>
+              <div
+                data-ocid="edit.filter.tab"
+                className="flex gap-2 overflow-x-auto scrollbar-hide pb-1"
+              >
+                {FILTERS.map((f) => (
+                  <button
+                    key={f.name}
+                    type="button"
+                    onClick={() => setSelectedFilter(f.name)}
+                    className="shrink-0 flex flex-col items-center gap-1 active:scale-95 transition-transform"
+                  >
+                    <div
+                      className={`w-16 h-16 rounded-xl overflow-hidden ring-2 transition-all ${
+                        selectedFilter === f.name
+                          ? "ring-white scale-105"
+                          : "ring-transparent"
+                      }`}
+                    >
+                      <div
+                        className="w-full h-full"
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(135deg, #ff6b6b 0%, #ffd93d 50%, #6c5ce7 100%)",
+                          filter: f.css || "none",
+                        }}
+                      />
+                    </div>
+                    <span
+                      className={`text-[10px] font-medium ${
+                        selectedFilter === f.name
+                          ? "text-white"
+                          : "text-white/50"
+                      }`}
+                    >
+                      {f.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TEXT TAB */}
+          {activeTab === "text" && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-white">
+                💬 Text Overlay
+              </h3>
+
+              <div>
+                <Input
+                  data-ocid="edit.overlay_text.input"
+                  placeholder="Add text overlay..."
+                  value={overlayText}
+                  onChange={(e) => setOverlayText(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/30 text-sm"
+                />
+              </div>
+
+              {/* Font size */}
+              <div className="space-y-2">
+                <p className="text-xs text-white/60">Font Size</p>
+                <div className="flex gap-2">
+                  {(["small", "medium", "large"] as const).map((sz) => (
+                    <button
+                      key={sz}
+                      type="button"
+                      data-ocid={`edit.text_size_${sz}.button`}
+                      onClick={() => setTextSize(sz)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold capitalize transition-all ${
+                        textSize === sz
+                          ? "text-white"
+                          : "bg-white/5 border border-white/10 text-white/50"
+                      }`}
+                      style={
+                        textSize === sz
+                          ? { background: "oklch(0.65 0.28 15)" }
+                          : {}
+                      }
+                    >
+                      {sz === "small" ? "A" : sz === "medium" ? "AA" : "AAA"}
+                      <span className="block text-[9px] mt-0.5 opacity-70">
+                        {sz}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Text position */}
+              <div className="space-y-2">
+                <p className="text-xs text-white/60">Position</p>
+                <div className="flex gap-2">
+                  {(["top", "center", "bottom"] as const).map((pos) => (
+                    <button
+                      key={pos}
+                      type="button"
+                      data-ocid={`edit.text_pos_${pos}.button`}
+                      onClick={() => setTextPosition(pos)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold capitalize transition-all ${
+                        textPosition === pos
+                          ? "text-white"
+                          : "bg-white/5 border border-white/10 text-white/50"
+                      }`}
+                      style={
+                        textPosition === pos
+                          ? { background: "oklch(0.65 0.28 15)" }
+                          : {}
+                      }
+                    >
+                      {pos === "top" ? "⬆️" : pos === "center" ? "⬛" : "⬇️"}
+                      <span className="block text-[9px] mt-0.5 opacity-70">
+                        {pos}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {overlayText && (
+                <p className="text-xs text-white/40 text-center">
+                  Preview visible on the video above
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* SPEED TAB */}
+          {activeTab === "speed" && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-white">
+                ⚡ Playback Speed
+              </h3>
+              <div className="grid grid-cols-4 gap-2">
+                {[0.5, 1, 1.5, 2].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    data-ocid={`edit.speed_${String(s).replace(".", "_")}.button`}
+                    onClick={() => setSpeed(s)}
+                    className={`py-3 rounded-xl font-bold text-sm transition-all ${
+                      speed === s
+                        ? "text-white"
+                        : "bg-white/5 border border-white/10 text-white/50"
+                    }`}
+                    style={
+                      speed === s ? { background: "oklch(0.65 0.28 15)" } : {}
+                    }
+                  >
+                    {s}×
+                  </button>
+                ))}
+              </div>
+              <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                <p className="text-white/40 text-xs">Current speed</p>
+                <p className="text-white font-bold text-2xl">{speed}×</p>
+                {speed === 0.5 && (
+                  <p className="text-purple-300 text-xs mt-1">Slow Motion</p>
+                )}
+                {speed === 2 && (
+                  <p className="text-amber-300 text-xs mt-1">Fast Forward</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* VOLUME TAB */}
+          {activeTab === "volume" && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-white">🔊 Volume</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-white/60">🔇 Mute</span>
+                  <span className="text-sm font-bold text-white tabular-nums">
+                    {volume}%
+                  </span>
+                  <span className="text-xs text-white/60">🔊 Max</span>
+                </div>
+                <input
+                  type="range"
+                  data-ocid="edit.volume.input"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={volume}
+                  onChange={(e) => {
+                    const v = Number.parseInt(e.target.value);
+                    setVolume(v);
+                    if (videoRef.current) videoRef.current.volume = v / 100;
+                  }}
+                  className="w-full accent-white h-2 rounded-full bg-white/20 cursor-pointer"
+                />
+              </div>
+              <div className="bg-white/5 rounded-xl px-3 py-2 text-center">
+                <p className="text-white/40 text-xs">Volume level</p>
+                <div className="flex items-center justify-center gap-2 mt-1">
+                  <div className="flex gap-0.5 items-end h-6">
+                    {[20, 40, 60, 80, 100].map((level) => (
+                      <div
+                        key={level}
+                        className="w-1.5 rounded-sm transition-all"
+                        style={{
+                          height: `${(level / 100) * 24}px`,
+                          background:
+                            volume >= level
+                              ? "oklch(0.65 0.28 15)"
+                              : "oklch(0.3 0 0)",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-white font-bold text-lg">
+                    {volume}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ── Audio track ── */}
         {routeState.audioFile && (

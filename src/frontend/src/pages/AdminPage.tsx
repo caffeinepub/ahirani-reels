@@ -1,6 +1,12 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -45,6 +51,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
+import React from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import CreatorBadge from "../components/CreatorBadge";
@@ -52,6 +59,7 @@ import { LOCAL_AD_RATE_PER_DAY } from "../components/ads/ads-config";
 import type {
   AdRpmConfig,
   AdUnitIds,
+  AdminWithdrawal,
   LocalAd,
   MusicGenre,
   MusicTrack,
@@ -62,7 +70,7 @@ import type {
 } from "../context/AppContext";
 import { computeVideoEarnings, useApp } from "../context/AppContext";
 import { formatCount, formatTime, generateId } from "../utils/trending";
-import { saveVideoFileToDB } from "../utils/videoDB";
+import { getVideoFromDB, saveVideoToDB } from "../utils/videoDB";
 
 const ADMIN_NAME = "समाधान माळी";
 
@@ -279,6 +287,305 @@ const ADMIN_VIDEO_TYPES: Array<{
   { type: "premium", label: "Premium", hint: "Subscribers only" },
 ];
 
+// ─── Admin Wallet Tab ────────────────────────────────────────────────────────
+
+function AdminWalletTab() {
+  const { state, dispatch } = useApp();
+  const [method, setMethod] = React.useState<"upi" | "bank">("upi");
+  const [fullName, setFullName] = React.useState("");
+  const [upiId, setUpiId] = React.useState("");
+  const [bankName, setBankName] = React.useState("");
+  const [accountNumber, setAccountNumber] = React.useState("");
+  const [ifsc, setIfsc] = React.useState("");
+  const [amount, setAmount] = React.useState("");
+  const [note, setNote] = React.useState("");
+
+  const totalEarnings = state.adminTotalEarnings ?? 0;
+  const paidOut = state.adminWithdrawals
+    .filter((w) => w.status === "paid")
+    .reduce((s, w) => s + w.amount, 0);
+  const pendingOut = state.adminWithdrawals
+    .filter((w) => w.status === "pending")
+    .reduce((s, w) => s + w.amount, 0);
+  const availableBalance = Math.max(0, totalEarnings - paidOut - pendingOut);
+
+  const handleWithdraw = () => {
+    const amt = Number.parseFloat(amount);
+    if (!fullName.trim()) {
+      toast.error("पूर्ण नाव टाका");
+      return;
+    }
+    if (method === "upi" && !upiId.trim()) {
+      toast.error("UPI ID टाका");
+      return;
+    }
+    if (
+      method === "bank" &&
+      (!bankName.trim() || !accountNumber.trim() || !ifsc.trim())
+    ) {
+      toast.error("Bank details पूर्ण भरा");
+      return;
+    }
+    if (Number.isNaN(amt) || amt < 500) {
+      toast.error("किमान ₹500 withdraw करा");
+      return;
+    }
+    if (amt > availableBalance) {
+      toast.error("Balance कमी आहे");
+      return;
+    }
+
+    const w: AdminWithdrawal = {
+      id: generateId(),
+      method,
+      fullName: fullName.trim(),
+      upiId: method === "upi" ? upiId.trim() : undefined,
+      bankName: method === "bank" ? bankName.trim() : undefined,
+      accountNumber: method === "bank" ? accountNumber.trim() : undefined,
+      ifsc: method === "bank" ? ifsc.trim().toUpperCase() : undefined,
+      amount: amt,
+      status: "pending",
+      createdAt: Date.now(),
+      note: note.trim() || undefined,
+    };
+    dispatch({ type: "ADD_ADMIN_WITHDRAWAL", withdrawal: w });
+    toast.success(`₹${amt.toFixed(2)} withdrawal request नोंदवला`);
+    setAmount("");
+    setNote("");
+  };
+
+  return (
+    <div className="space-y-6 max-w-lg">
+      <h2 className="text-white/60 text-sm font-medium uppercase tracking-wider">
+        Admin Wallet
+      </h2>
+
+      {/* Balance Cards */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          {
+            label: "एकूण कमाई (40%)",
+            value: totalEarnings,
+            color: "text-emerald-400",
+          },
+          {
+            label: "Available",
+            value: availableBalance,
+            color: "text-amber-400",
+          },
+          { label: "Pending Out", value: pendingOut, color: "text-orange-400" },
+        ].map((c) => (
+          <div
+            key={c.label}
+            className="rounded-2xl border border-white/10 bg-card p-3 text-center"
+          >
+            <p className={`font-bold text-lg font-display ${c.color}`}>
+              ₹{c.value.toFixed(0)}
+            </p>
+            <p className="text-white/40 text-xs mt-1">{c.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Withdraw Form */}
+      <div className="rounded-2xl border border-white/10 bg-card p-5 space-y-4">
+        <h3 className="text-white font-semibold flex items-center gap-2">
+          <IndianRupee className="w-4 h-4 text-amber-400" />
+          Withdraw to Bank / UPI
+        </h3>
+
+        {/* Method Toggle */}
+        <div className="flex gap-2">
+          {(["upi", "bank"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              data-ocid={`admin.wallet.method_${m}.toggle`}
+              onClick={() => setMethod(m)}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+                method === m
+                  ? "bg-amber-500/30 text-amber-300 border border-amber-500/40"
+                  : "bg-white/5 text-white/50 border border-white/10"
+              }`}
+            >
+              {m === "upi" ? "🏦 UPI" : "🏛️ Bank Transfer"}
+            </button>
+          ))}
+        </div>
+
+        {/* Full Name */}
+        <div>
+          <p className="text-white/50 text-xs mb-1">पूर्ण नाव</p>
+          <input
+            data-ocid="admin.wallet.fullname.input"
+            type="text"
+            placeholder="Full Name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+          />
+        </div>
+
+        {method === "upi" ? (
+          <div>
+            <p className="text-white/50 text-xs mb-1">UPI ID</p>
+            <input
+              data-ocid="admin.wallet.upiid.input"
+              type="text"
+              placeholder="yourname@upi"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+            />
+          </div>
+        ) : (
+          <>
+            <div>
+              <p className="text-white/50 text-xs mb-1">Bank Name</p>
+              <input
+                data-ocid="admin.wallet.bankname.input"
+                type="text"
+                placeholder="State Bank of India"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+              />
+            </div>
+            <div>
+              <p className="text-white/50 text-xs mb-1">Account Number</p>
+              <input
+                data-ocid="admin.wallet.accountnumber.input"
+                type="text"
+                placeholder="Account Number"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+              />
+            </div>
+            <div>
+              <p className="text-white/50 text-xs mb-1">IFSC Code</p>
+              <input
+                data-ocid="admin.wallet.ifsc.input"
+                type="text"
+                placeholder="SBIN0001234"
+                value={ifsc}
+                onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Amount */}
+        <div>
+          <p className="text-white/50 text-xs mb-1">Amount (किमान ₹500)</p>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm font-bold">
+              ₹
+            </span>
+            <input
+              data-ocid="admin.wallet.amount.input"
+              type="number"
+              min={500}
+              placeholder="500"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Note */}
+        <div>
+          <p className="text-white/50 text-xs mb-1">Note (optional)</p>
+          <input
+            data-ocid="admin.wallet.note.input"
+            type="text"
+            placeholder="Optional note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+          />
+        </div>
+
+        <Button
+          data-ocid="admin.wallet.withdraw.submit_button"
+          onClick={handleWithdraw}
+          className="w-full font-semibold"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.55 0.22 60), oklch(0.5 0.2 45))",
+          }}
+        >
+          💸 Withdraw Request Submit करा
+        </Button>
+      </div>
+
+      {/* Withdrawal History */}
+      {state.adminWithdrawals.length > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-card p-5 space-y-3">
+          <h3 className="text-white font-semibold">Withdrawal History</h3>
+          {state.adminWithdrawals.map((w, i) => (
+            <div
+              key={w.id}
+              data-ocid={`admin.wallet.history.item.${i + 1}`}
+              className="flex items-start justify-between p-3 rounded-xl bg-white/5 border border-white/10 gap-3"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-medium truncate">
+                  {w.fullName}
+                </p>
+                <p className="text-white/40 text-xs">
+                  {w.method === "upi"
+                    ? `UPI: ${w.upiId}`
+                    : `Bank: ${w.bankName} · ${w.accountNumber}`}
+                </p>
+                {w.note && (
+                  <p className="text-white/30 text-xs italic">{w.note}</p>
+                )}
+                <p className="text-white/30 text-xs">
+                  {new Date(w.createdAt).toLocaleDateString("mr-IN")}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <span className="text-amber-400 font-bold text-sm">
+                  ₹{w.amount.toFixed(0)}
+                </span>
+                {w.status === "pending" ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-orange-400 text-xs bg-orange-400/10 rounded px-2 py-0.5">
+                      Pending
+                    </span>
+                    <Button
+                      data-ocid={`admin.wallet.history.paid.${i + 1}`}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        dispatch({
+                          type: "MARK_ADMIN_WITHDRAWAL_PAID",
+                          id: w.id,
+                        });
+                        toast.success("Marked as paid");
+                      }}
+                      className="text-xs h-6 px-2 border-emerald-500/30 text-emerald-400"
+                    >
+                      Mark Paid
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="text-emerald-400 text-xs bg-emerald-400/10 rounded px-2 py-0.5">
+                    ✓ Paid
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
@@ -296,6 +603,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     | "security"
     | "live"
     | "settings"
+    | "adminwallet"
   >("overview");
 
   // Admin upload form state
@@ -307,6 +615,10 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [adminHashtags, setAdminHashtags] = useState<string[]>([]);
   const [adminVideoType, setAdminVideoType] = useState<VideoType>("reel");
   const [adminPosting, setAdminPosting] = useState(false);
+  const [previewVideo, setPreviewVideo] = useState<{
+    url: string;
+    caption: string;
+  } | null>(null);
   const adminFileInputRef = useRef<HTMLInputElement>(null);
 
   // RPM config local state (pre-filled from global state)
@@ -446,9 +758,17 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       let finalUrl = adminVideoUrl.trim();
 
       if (hasFile && adminVideoFile) {
-        // Save file to IndexedDB and use blob URL for immediate playback
-        await saveVideoFileToDB(videoId, adminVideoFile);
-        finalUrl = URL.createObjectURL(adminVideoFile);
+        // Convert to base64 data: URL for persistent cross-reload playback
+        finalUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Failed to read video file"));
+          reader.readAsDataURL(adminVideoFile);
+        });
+        // Also save to IndexedDB as fallback
+        saveVideoToDB(videoId, finalUrl).catch(() => {
+          /* non-critical */
+        });
       }
 
       dispatch({
@@ -505,7 +825,21 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [subPriceDraft, setSubPriceDraft] = useState(
     state.subscriptionPrice ?? 600,
   );
+
   const [broadcastMsg, setBroadcastMsg] = useState("");
+
+  // Payment settings state
+  const [paymentDraft, setPaymentDraft] = useState(() => {
+    const existing = state.adminPaymentSettings;
+    return {
+      upiId: existing?.upiId ?? "",
+      upiName: existing?.upiName ?? "",
+      bankName: existing?.bankName ?? "",
+      accountHolder: existing?.accountHolder ?? "",
+      accountNumber: existing?.accountNumber ?? "",
+      ifsc: existing?.ifsc ?? "",
+    };
+  });
 
   const tabs = [
     "overview",
@@ -521,6 +855,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     "reports",
     "security",
     "settings",
+    "adminwallet",
   ] as const;
 
   return (
@@ -563,7 +898,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 : "text-white/40 hover:text-white/70"
             }`}
           >
-            {tab}
+            {tab === "adminwallet" ? "💰 Wallet" : tab}
             {tab === "artists" &&
               state.users.filter(
                 (u) =>
@@ -1590,7 +1925,30 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                       >
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-10 h-14 bg-white/10 rounded overflow-hidden shrink-0 flex items-center justify-center">
+                            <button
+                              type="button"
+                              className="w-10 h-14 bg-white/10 rounded overflow-hidden shrink-0 flex items-center justify-center cursor-pointer hover:opacity-80 p-0 border-0"
+                              onClick={async () => {
+                                let url = video.url;
+                                if (!url || url === "__local__") {
+                                  const blobUrl = await getVideoFromDB(
+                                    video.id,
+                                  );
+                                  if (blobUrl) {
+                                    url = blobUrl;
+                                  } else {
+                                    toast.error(
+                                      "Video not available on this device",
+                                    );
+                                    return;
+                                  }
+                                }
+                                setPreviewVideo({
+                                  url,
+                                  caption: video.caption,
+                                });
+                              }}
+                            >
                               {video.thumbnail ? (
                                 <img
                                   src={video.thumbnail}
@@ -1610,7 +1968,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                                   {video.url === "__local__" ? "⏳" : "🎬"}
                                 </span>
                               )}
-                            </div>
+                            </button>
                             <div className="min-w-0">
                               <p className="text-white text-xs line-clamp-2">
                                 {video.caption}
@@ -2117,7 +2475,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                   <p className="text-white/40 text-xs mt-0.5">
                     {adminVideoFile
                       ? `${(adminVideoFile.size / 1024 / 1024).toFixed(1)} MB selected`
-                      : "MP4, MOV, WebM · Max 100MB"}
+                      : "MP4, MOV, WebM · Max 400MB"}
                   </p>
                 </div>
                 {adminVideoFile && (
@@ -2142,8 +2500,8 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  if (file.size > 100 * 1024 * 1024) {
-                    toast.error("Video is too large. Maximum size is 100MB.");
+                  if (file.size > 400 * 1024 * 1024) {
+                    toast.error("Video is too large. Maximum size is 400MB.");
                     return;
                   }
                   setAdminVideoFile(file);
@@ -4234,6 +4592,157 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
               </div>
             </div>
 
+            {/* Online Payment Info Card */}
+            <div
+              className="rounded-2xl border border-white/10 bg-card p-5 space-y-4"
+              data-ocid="admin.settings.payment.card"
+            >
+              <div className="flex items-center gap-2">
+                <IndianRupee className="w-5 h-5 text-amber-400" />
+                <h3 className="text-white font-semibold">
+                  💳 ऑनलाईन पेमेंट माहिती
+                </h3>
+              </div>
+              <p className="text-white/50 text-sm">
+                ही माहिती भरल्यानंतर Subscription page वर UPI/Bank payment option
+                दिसेल. Users payment करू शकतात.
+              </p>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-1">
+                  <span className="text-white/50 text-xs font-medium block">
+                    UPI ID
+                  </span>
+                  <input
+                    data-ocid="admin.settings.payment.upiid_input"
+                    type="text"
+                    placeholder="admin@upi"
+                    value={paymentDraft.upiId}
+                    onChange={(e) =>
+                      setPaymentDraft((d) => ({ ...d, upiId: e.target.value }))
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-white/50 text-xs font-medium block">
+                    UPI Account Name
+                  </span>
+                  <input
+                    data-ocid="admin.settings.payment.upiname_input"
+                    type="text"
+                    placeholder="Samadhan Mali"
+                    value={paymentDraft.upiName}
+                    onChange={(e) =>
+                      setPaymentDraft((d) => ({
+                        ...d,
+                        upiName: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-white/50 text-xs font-medium block">
+                    Bank Name
+                  </span>
+                  <input
+                    data-ocid="admin.settings.payment.bankname_input"
+                    type="text"
+                    placeholder="State Bank of India"
+                    value={paymentDraft.bankName}
+                    onChange={(e) =>
+                      setPaymentDraft((d) => ({
+                        ...d,
+                        bankName: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-white/50 text-xs font-medium block">
+                    Account Holder Name
+                  </span>
+                  <input
+                    data-ocid="admin.settings.payment.accountholder_input"
+                    type="text"
+                    placeholder="Samadhan Mali"
+                    value={paymentDraft.accountHolder}
+                    onChange={(e) =>
+                      setPaymentDraft((d) => ({
+                        ...d,
+                        accountHolder: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-white/50 text-xs font-medium block">
+                    Account Number
+                  </span>
+                  <input
+                    data-ocid="admin.settings.payment.accountnumber_input"
+                    type="text"
+                    placeholder="1234567890"
+                    value={paymentDraft.accountNumber}
+                    onChange={(e) =>
+                      setPaymentDraft((d) => ({
+                        ...d,
+                        accountNumber: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-white/50 text-xs font-medium block">
+                    IFSC Code
+                  </span>
+                  <input
+                    data-ocid="admin.settings.payment.ifsc_input"
+                    type="text"
+                    placeholder="SBIN0001234"
+                    value={paymentDraft.ifsc}
+                    onChange={(e) =>
+                      setPaymentDraft((d) => ({
+                        ...d,
+                        ifsc: e.target.value.toUpperCase(),
+                      }))
+                    }
+                    className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-white/30 text-sm outline-none focus:border-amber-500/60 transition-colors"
+                  />
+                </div>
+              </div>
+              <Button
+                data-ocid="admin.settings.payment.save_button"
+                size="sm"
+                onClick={() => {
+                  if (
+                    !paymentDraft.upiId.trim() &&
+                    !paymentDraft.accountNumber.trim()
+                  ) {
+                    toast.error("कमीत कमी UPI ID किंवा Bank details भरा");
+                    return;
+                  }
+                  dispatch({
+                    type: "SET_ADMIN_PAYMENT_SETTINGS",
+                    settings: paymentDraft,
+                  });
+                  toast.success(
+                    "Payment माहिती save झाली! Subscription page वर दिसेल.",
+                  );
+                }}
+                className="w-full font-semibold"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.55 0.22 60), oklch(0.5 0.2 45))",
+                }}
+              >
+                💾 Save Payment Info
+              </Button>
+            </div>
+
             {/* Extra stat cards for overview */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-gradient-to-br from-pink-600/20 to-pink-600/5 border border-white/10 p-4">
@@ -4263,7 +4772,32 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             </div>
           </div>
         )}
+
+        {/* Admin Wallet tab */}
+        {activeTab === "adminwallet" && <AdminWalletTab />}
       </div>
+      {/* Video Preview Dialog */}
+      <Dialog open={!!previewVideo} onOpenChange={() => setPreviewVideo(null)}>
+        <DialogContent className="bg-black border-white/10 p-2 max-w-sm w-full">
+          <DialogHeader>
+            <DialogTitle className="text-white text-sm line-clamp-1">
+              {previewVideo?.caption}
+            </DialogTitle>
+          </DialogHeader>
+          {previewVideo && (
+            <video
+              src={previewVideo.url}
+              className="w-full rounded-lg"
+              controls
+              autoPlay
+              playsInline
+              style={{ maxHeight: 400, background: "black" }}
+            >
+              <track kind="captions" />
+            </video>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -23,6 +23,8 @@ import {
   AlertTriangle,
   Camera,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clapperboard,
   Clock,
   Copy,
@@ -32,6 +34,7 @@ import {
   Eye,
   Facebook,
   FileText,
+  Film,
   Gift,
   Grid2X2,
   Headphones,
@@ -40,20 +43,24 @@ import {
   Instagram,
   Link2,
   Loader2,
+  LogOut,
   MapPin,
   Music,
   Phone,
+  PhoneCall,
   Plus,
   Settings,
   Share2,
   Shield,
   Sparkles,
   Trash2,
+  Volume2,
+  VolumeX,
   X,
   XCircle,
   Youtube,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import CreatorBadge from "../components/CreatorBadge";
@@ -1164,7 +1171,12 @@ export default function ProfilePage() {
   const { t } = useLang();
   const user = state.currentUser;
   const [editOpen, setEditOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(
+    null,
+  );
+  const [playerMuted, setPlayerMuted] = useState(false);
 
   if (!user) return null;
 
@@ -1197,13 +1209,93 @@ export default function ProfilePage() {
         <LanguageSwitcher className="flex-1 justify-center" />
         <button
           type="button"
-          onClick={handleLogout}
+          onClick={() => setShowSettings(true)}
+          data-ocid="profile.settings.button"
           className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors shrink-0"
-          title={t("profile.logout")}
+          title="Settings"
         >
           <Settings className="w-4 h-4 text-white/70" />
         </button>
       </div>
+
+      {/* ── Settings Sheet ───────────────────────────────────────────────── */}
+      <Sheet open={showSettings} onOpenChange={setShowSettings}>
+        <SheetContent
+          side="bottom"
+          data-ocid="profile.settings.sheet"
+          className="rounded-t-2xl border-t border-white/10 pb-8"
+          style={{ background: "oklch(0.13 0.03 260)" }}
+        >
+          <SheetHeader className="px-5 py-4 border-b border-white/10">
+            <SheetTitle className="text-white text-base font-bold">
+              ⚙️ Settings
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-1 px-4 py-3">
+            <button
+              type="button"
+              data-ocid="profile.settings.edit_button"
+              onClick={() => {
+                setShowSettings(false);
+                setEditOpen(true);
+              }}
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-white/90 hover:bg-white/10 transition-colors text-left"
+            >
+              <span className="text-lg">✏️</span>
+              <span className="font-medium">Edit Profile</span>
+            </button>
+            <Link
+              to="/about"
+              data-ocid="profile.settings.about.link"
+              onClick={() => setShowSettings(false)}
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-white/90 hover:bg-white/10 transition-colors"
+            >
+              <span className="text-lg">ℹ️</span>
+              <span className="font-medium">About App</span>
+            </Link>
+            <Link
+              to="/privacy"
+              data-ocid="profile.settings.privacy.link"
+              onClick={() => setShowSettings(false)}
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-white/90 hover:bg-white/10 transition-colors"
+            >
+              <span className="text-lg">🔒</span>
+              <span className="font-medium">Privacy Policy</span>
+            </Link>
+            <Link
+              to="/terms"
+              data-ocid="profile.settings.terms.link"
+              onClick={() => setShowSettings(false)}
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-white/90 hover:bg-white/10 transition-colors"
+            >
+              <span className="text-lg">📋</span>
+              <span className="font-medium">Terms & Conditions</span>
+            </Link>
+            <Link
+              to="/contact"
+              data-ocid="profile.settings.contact.link"
+              onClick={() => setShowSettings(false)}
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-white/90 hover:bg-white/10 transition-colors"
+            >
+              <span className="text-lg">📞</span>
+              <span className="font-medium">Contact / Support</span>
+            </Link>
+            <div className="h-px bg-white/10 my-2" />
+            <button
+              type="button"
+              data-ocid="profile.settings.logout.button"
+              onClick={() => {
+                setShowSettings(false);
+                handleLogout();
+              }}
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors text-left"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="font-medium">Logout</span>
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <div className="pb-24">
         {/* Profile hero */}
@@ -1523,14 +1615,47 @@ export default function ProfilePage() {
                   animate={{ opacity: 1 }}
                   transition={{ delay: i * 0.05 }}
                   className="relative aspect-[9/16] bg-card overflow-hidden cursor-pointer group"
+                  onClick={() => setSelectedVideoIndex(i)}
                 >
-                  <video
-                    src={video.url}
-                    className="w-full h-full object-cover"
-                    muted
-                    playsInline
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
+                  {/* Show thumbnail if available, otherwise attempt video preview */}
+                  {video.thumbnail ? (
+                    <img
+                      src={video.thumbnail}
+                      alt={video.caption}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : video.url && video.url !== "__local__" ? (
+                    <video
+                      src={video.url}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onLoadedData={(e) => {
+                        e.currentTarget.currentTime = 0.5;
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-white/5">
+                      <Film className="w-8 h-8 text-white/20" />
+                    </div>
+                  )}
+                  {/* Play icon overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                      <svg
+                        className="w-5 h-5 text-white ml-0.5"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-label="Play video"
+                        role="img"
+                      >
+                        <title>Play video</title>
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                   <div className="absolute bottom-2 left-2 flex items-center gap-1">
                     <Heart className="w-3 h-3 text-white fill-white" />
                     <span className="text-white text-xs font-semibold">
@@ -1543,6 +1668,108 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Full-screen Video Player Modal */}
+      <AnimatePresence>
+        {selectedVideoIndex !== null && myVideos[selectedVideoIndex] && (
+          <motion.div
+            key="video-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black flex flex-col"
+          >
+            {/* Close and mute buttons */}
+            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/70 to-transparent">
+              <button
+                type="button"
+                aria-label="Close"
+                data-ocid="profile.player.close_button"
+                onClick={() => setSelectedVideoIndex(null)}
+                className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+              >
+                <XCircle className="w-5 h-5 text-white" />
+              </button>
+              <button
+                type="button"
+                aria-label={playerMuted ? "Unmute" : "Mute"}
+                data-ocid="profile.player.mute_toggle"
+                onClick={() => setPlayerMuted((m) => !m)}
+                className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+              >
+                {playerMuted ? (
+                  <VolumeX className="w-5 h-5 text-white" />
+                ) : (
+                  <Volume2 className="w-5 h-5 text-white" />
+                )}
+              </button>
+            </div>
+
+            {/* Video */}
+            <video
+              key={myVideos[selectedVideoIndex].id}
+              src={myVideos[selectedVideoIndex].url}
+              autoPlay
+              playsInline
+              controls={false}
+              muted={playerMuted}
+              loop
+              className="w-full h-full object-contain"
+              data-ocid="profile.player.canvas_target"
+            />
+
+            {/* Caption and info at bottom */}
+            <div className="absolute bottom-0 left-0 right-0 z-10 p-5 bg-gradient-to-t from-black/80 to-transparent">
+              <p className="text-white font-medium text-sm mb-1 line-clamp-2">
+                {myVideos[selectedVideoIndex].caption}
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <Heart className="w-4 h-4 text-red-400 fill-red-400" />
+                  <span className="text-white/80 text-xs">
+                    {formatCount(myVideos[selectedVideoIndex].likesCount)}
+                  </span>
+                </div>
+                <span className="text-white/40 text-xs">
+                  {selectedVideoIndex + 1} / {myVideos.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Prev / Next navigation */}
+            {selectedVideoIndex > 0 && (
+              <button
+                type="button"
+                aria-label="Previous video"
+                data-ocid="profile.player.pagination_prev"
+                onClick={() =>
+                  setSelectedVideoIndex((idx) =>
+                    idx !== null ? idx - 1 : null,
+                  )
+                }
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+              >
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            {selectedVideoIndex < myVideos.length - 1 && (
+              <button
+                type="button"
+                aria-label="Next video"
+                data-ocid="profile.player.pagination_next"
+                onClick={() =>
+                  setSelectedVideoIndex((idx) =>
+                    idx !== null ? idx + 1 : null,
+                  )
+                }
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+              >
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Footer: Terms, Privacy & Contact links */}
       <div className="px-5 py-4 border-t border-white/8 flex items-center justify-center gap-3 flex-wrap">
