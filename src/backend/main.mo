@@ -1,8 +1,8 @@
 import Map "mo:core/Map";
 import Nat "mo:core/Nat";
+import Text "mo:core/Text";
 import Iter "mo:core/Iter";
 import List "mo:core/List";
-import Text "mo:core/Text";
 
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
@@ -11,7 +11,6 @@ import Storage "blob-storage/Storage";
 actor {
   type UserId = Nat;
   type VideoId = Nat;
-
   type LocalAd = {
     id : Text;
     businessName : Text;
@@ -28,6 +27,8 @@ actor {
   let localAds = Map.empty<Nat, LocalAd>();
   let otps = Map.empty<UserId, Nat>();
   let videos = Map.empty<VideoId, ContentData>();
+  var paymentSettings : ?Text = null;
+  var appVersion : ?Text = null;
 
   public type ContentData = {
     id : Text;
@@ -55,5 +56,27 @@ actor {
       blob;
     };
     videos.add(videos.size(), contentData);
+  };
+
+  public shared ({ caller }) func setAdminPaymentSettings(json : Text) : async () {
+    paymentSettings := ?json;
+  };
+
+  public query ({ caller }) func getAdminPaymentSettings() : async Text {
+    switch (paymentSettings) {
+      case (?settings) { settings };
+      case (null) { "" };
+    };
+  };
+
+  public shared ({ caller }) func setAppVersion(version : Text) : async () {
+    appVersion := ?version;
+  };
+
+  public query ({ caller }) func getAppVersion() : async Text {
+    switch (appVersion) {
+      case (?ver) { ver };
+      case (null) { "" };
+    };
   };
 };

@@ -51,7 +51,11 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   'addContent' : IDL.Func([UserId, IDL.Text, IDL.Text, ExternalBlob], [], []),
   'adminAddUser' : IDL.Func([UserId, IDL.Text], [], []),
+  'getAdminPaymentSettings' : IDL.Func([], [IDL.Text], ['query']),
+  'getAppVersion' : IDL.Func([], [IDL.Text], ['query']),
   'getUser' : IDL.Func([UserId], [IDL.Vec(UserId)], ['query']),
+  'setAdminPaymentSettings' : IDL.Func([IDL.Text], [], []),
+  'setAppVersion' : IDL.Func([IDL.Text], [], []),
 });
 
 export const idlInitArgs = [];
@@ -100,7 +104,11 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     'addContent' : IDL.Func([UserId, IDL.Text, IDL.Text, ExternalBlob], [], []),
     'adminAddUser' : IDL.Func([UserId, IDL.Text], [], []),
+    'getAdminPaymentSettings' : IDL.Func([], [IDL.Text], ['query']),
+    'getAppVersion' : IDL.Func([], [IDL.Text], ['query']),
     'getUser' : IDL.Func([UserId], [IDL.Vec(UserId)], ['query']),
+    'setAdminPaymentSettings' : IDL.Func([IDL.Text], [], []),
+    'setAppVersion' : IDL.Func([IDL.Text], [], []),
   });
 };
 

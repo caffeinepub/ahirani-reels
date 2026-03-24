@@ -69,6 +69,7 @@ import type {
   WithdrawalRequest,
 } from "../context/AppContext";
 import { computeVideoEarnings, useApp } from "../context/AppContext";
+import { useActor } from "../hooks/useActor";
 import { formatCount, formatTime, generateId } from "../utils/trending";
 import { getVideoFromDB, saveVideoToDB } from "../utils/videoDB";
 
@@ -588,6 +589,7 @@ function AdminWalletTab() {
 
 function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { state, dispatch } = useApp();
+  const { actor } = useActor();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
     | "overview"
@@ -4898,6 +4900,12 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                     type: "SET_ADMIN_PAYMENT_SETTINGS",
                     settings: paymentDraft,
                   });
+                  // Sync to backend so all users get payment info
+                  if (actor) {
+                    actor
+                      .setAdminPaymentSettings(JSON.stringify(paymentDraft))
+                      .catch(() => {});
+                  }
                   toast.success(
                     "Payment माहिती save झाली! Subscription page वर दिसेल.",
                   );

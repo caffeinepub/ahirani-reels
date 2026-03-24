@@ -110,7 +110,11 @@ export interface backendInterface {
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     addContent(_userId: UserId, name: string, description: string, blob: ExternalBlob): Promise<void>;
     adminAddUser(userId: UserId, username: string): Promise<void>;
+    getAdminPaymentSettings(): Promise<string>;
+    getAppVersion(): Promise<string>;
     getUser(_userId: UserId): Promise<Array<UserId>>;
+    setAdminPaymentSettings(json: string): Promise<void>;
+    setAppVersion(version: string): Promise<void>;
 }
 import type { ExternalBlob as _ExternalBlob, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -227,6 +231,34 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getAdminPaymentSettings(): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAdminPaymentSettings();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAdminPaymentSettings();
+            return result;
+        }
+    }
+    async getAppVersion(): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAppVersion();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAppVersion();
+            return result;
+        }
+    }
     async getUser(arg0: UserId): Promise<Array<UserId>> {
         if (this.processError) {
             try {
@@ -238,6 +270,34 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getUser(arg0);
+            return result;
+        }
+    }
+    async setAdminPaymentSettings(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.setAdminPaymentSettings(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.setAdminPaymentSettings(arg0);
+            return result;
+        }
+    }
+    async setAppVersion(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.setAppVersion(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.setAppVersion(arg0);
             return result;
         }
     }

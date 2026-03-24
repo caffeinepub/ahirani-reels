@@ -7,6 +7,7 @@ import {
   createRouter,
   useRouterState,
 } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import BottomNav from "./components/BottomNav";
 import { AppProvider, useApp } from "./context/AppContext";
 import { LanguageProvider } from "./context/LanguageContext";
@@ -29,6 +30,117 @@ import SearchPage from "./pages/SearchPage";
 import TermsPage from "./pages/TermsPage";
 import UploadPage from "./pages/UploadPage";
 import WalletPage from "./pages/WalletPage";
+
+// ─── PWA Update Banner ────────────────────────────────────────────────────────
+
+function UpdateBanner() {
+  const [showBanner, setShowBanner] = useState(false);
+  const [registration, setRegistration] =
+    useState<ServiceWorkerRegistration | null>(null);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        setRegistration(reg);
+
+        // Check if there's already a waiting SW
+        if (reg.waiting) {
+          setShowBanner(true);
+        }
+
+        reg.addEventListener("updatefound", () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener("statechange", () => {
+            if (
+              newWorker.state === "installed" &&
+              navigator.serviceWorker.controller
+            ) {
+              setShowBanner(true);
+              setRegistration(reg);
+            }
+          });
+        });
+      })
+      .catch(() => {});
+
+    // Listen for controllerchange (SW activated after skip waiting)
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
+  }, []);
+
+  if (!showBanner) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        background:
+          "linear-gradient(135deg, oklch(0.35 0.15 45), oklch(0.2 0.1 30))",
+        borderBottom: "1px solid oklch(0.55 0.22 60)",
+        padding: "10px 16px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "8px",
+      }}
+    >
+      <span
+        style={{ color: "white", fontSize: "13px", flex: 1, lineHeight: 1.4 }}
+      >
+        🔔 नवीन अपडेट उपलब्ध आहे! | New update available!
+      </span>
+      <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+        <button
+          type="button"
+          onClick={() => {
+            if (registration?.waiting) {
+              registration.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+          }}
+          style={{
+            background: "oklch(0.55 0.22 60)",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            padding: "5px 12px",
+            fontSize: "12px",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          अपडेट करा
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowBanner(false)}
+          style={{
+            background: "transparent",
+            color: "rgba(255,255,255,0.7)",
+            border: "1px solid rgba(255,255,255,0.3)",
+            borderRadius: "8px",
+            padding: "5px 10px",
+            fontSize: "12px",
+            cursor: "pointer",
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── Root layout ──────────────────────────────────────────────────────────────
 
@@ -283,6 +395,7 @@ export default function App() {
   return (
     <LanguageProvider>
       <AppProvider>
+        <UpdateBanner />
         <DesktopWrapper>
           <RouterProvider router={router} />
         </DesktopWrapper>

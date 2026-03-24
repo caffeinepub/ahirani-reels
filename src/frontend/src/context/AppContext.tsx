@@ -3654,6 +3654,23 @@ function AppProviderInner({ children }: { children: React.ReactNode }) {
     };
   }, [actor, isFetching]);
 
+  // Load admin payment settings from backend on actor available
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally fires once when actor is ready
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    (async () => {
+      try {
+        const json = await actor.getAdminPaymentSettings();
+        if (json?.trim()) {
+          const settings = JSON.parse(json);
+          dispatch({ type: "SET_ADMIN_PAYMENT_SETTINGS", settings });
+        }
+      } catch {
+        // Backend unavailable in dev — localStorage cache is used as fallback
+      }
+    })();
+  }, [actor, isFetching]);
+
   return (
     <AppContext.Provider value={{ state, dispatch, isBackendConnected }}>
       {children}

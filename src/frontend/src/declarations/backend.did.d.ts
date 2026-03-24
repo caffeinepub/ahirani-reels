@@ -41,7 +41,11 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   'addContent' : ActorMethod<[UserId, string, string, ExternalBlob], undefined>,
   'adminAddUser' : ActorMethod<[UserId, string], undefined>,
+  'getAdminPaymentSettings' : ActorMethod<[], string>,
+  'getAppVersion' : ActorMethod<[], string>,
   'getUser' : ActorMethod<[UserId], Array<UserId>>,
+  'setAdminPaymentSettings' : ActorMethod<[string], undefined>,
+  'setAppVersion' : ActorMethod<[string], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];
