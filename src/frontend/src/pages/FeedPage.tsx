@@ -240,7 +240,7 @@ function ReelCard({
   const [isPaused, setIsPaused] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
   const [videoUnavailable, setVideoUnavailable] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const isFollowing = useIsFollowing(video.uploaderId);
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const ocidIndex = index + 1;
@@ -622,9 +622,22 @@ function ReelCard({
             <p className="text-amber-400 font-bold text-base tracking-wide uppercase text-xs mb-1">
               Premium
             </p>
-            <p className="text-white font-semibold text-sm">
-              Subscribe to watch
+            <p className="text-white font-semibold text-sm mb-3">
+              हे Premium Content आहे
             </p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.location.href = "/upload";
+              }}
+              className="px-5 py-2 rounded-full text-sm font-bold text-black"
+              style={{
+                background: "linear-gradient(135deg, #f59e0b, #ef4444)",
+              }}
+            >
+              Subscribe करा ₹600
+            </button>
           </div>
         </div>
       )}

@@ -14,10 +14,19 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="फक्त अहिराणी" />
     <meta name="twitter:description" content="अहिराणी कलाकार आणि प्रेक्षकांसाठी खास रील प्लॅटफॉर्म" />
-    <script type="module" crossorigin src="/assets/index-CISCEZic.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-D6t7nkIN.css">
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/assets/uploads/file_000000008fec720794168ea3a1969798-1-1-1.png" />
+    <script type="module" crossorigin src="/assets/index-DdACnWMm.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-sFEzVtfz.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').catch(function() {});
+        });
+      }
+    </script>
   </body>
 </html>

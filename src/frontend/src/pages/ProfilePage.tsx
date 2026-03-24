@@ -13,7 +13,6 @@ import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -65,7 +64,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import CreatorBadge from "../components/CreatorBadge";
 import LanguageSwitcher from "../components/LanguageSwitcher";
-import { useApp } from "../context/AppContext";
+import { type SubscriptionRequest, useApp } from "../context/AppContext";
 import type {
   MusicGenre,
   MusicTrack,
@@ -168,8 +167,6 @@ function getDaysRemaining(ts: number): number {
 function SubscriptionCard({ user }: { user: User }) {
   const { state, dispatch } = useApp();
   const subPrice = state.subscriptionPrice ?? 600;
-  const [loading, setLoading] = useState(false);
-
   const { subscriptionStatus: status, subscriptionExpiry: expiry } = user;
   const daysRemaining = getDaysRemaining(expiry);
   const isExpired =
@@ -181,13 +178,38 @@ function SubscriptionCard({ user }: { user: User }) {
   const showRenew = isExpired || isNearingExpiry;
   const showSubscribe = isNone;
 
-  const handleSubscribe = async () => {
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    dispatch({ type: "SUBSCRIBE_ARTIST", userId: user.id });
-    setLoading(false);
-    toast.success("Subscribed! Valid for 1 year.", {
-      description: "You can now upload videos.",
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payRef, setPayRef] = useState("");
+  const [payMethod, setPayMethod] = useState<"upi" | "bank">("upi");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubscribe = () => {
+    setShowPayModal(true);
+  };
+
+  const handleSubmitPayment = () => {
+    if (!payRef.trim()) {
+      toast.error("Please enter your payment reference / UTR number");
+      return;
+    }
+    setSubmitting(true);
+    const req: SubscriptionRequest = {
+      id: `subreq_${Date.now()}`,
+      userId: user.id,
+      userName: user.username,
+      userEmail: user.phone || user.username,
+      amount: subPrice,
+      paymentMethod: payMethod,
+      paymentReference: payRef.trim(),
+      status: "pending",
+      createdAt: Date.now(),
+    };
+    dispatch({ type: "REQUEST_SUBSCRIPTION", request: req });
+    setSubmitting(false);
+    setShowPayModal(false);
+    setPayRef("");
+    toast.success("Payment submitted! Admin will approve within 24 hours.", {
+      description: "You'll get a notification once approved.",
     });
   };
 
@@ -218,123 +240,281 @@ function SubscriptionCard({ user }: { user: User }) {
             };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      data-ocid="profile.subscription.card"
-      className="rounded-2xl p-4 space-y-3"
-      style={cardStyle}
-    >
-      {/* Header row */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Crown
-            className={`w-4 h-4 ${
-              isActive && !isNearingExpiry
-                ? "text-emerald-400"
-                : isNearingExpiry
-                  ? "text-amber-400"
-                  : isExpired
-                    ? "text-red-400"
-                    : "text-white/40"
-            }`}
-          />
-          <span className="text-white font-semibold text-sm">
-            Artist Subscription
-          </span>
-        </div>
-        {/* Status pill */}
-        {isActive && !isNearingExpiry && (
-          <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            <CheckCircle2 className="w-3 h-3" /> Active
-          </span>
-        )}
-        {isNearingExpiry && (
-          <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            <Clock className="w-3 h-3" /> Expiring Soon
-          </span>
-        )}
-        {isExpired && (
-          <span className="inline-flex items-center gap-1 bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            <XCircle className="w-3 h-3" /> Expired
-          </span>
-        )}
-        {isNone && (
-          <span className="inline-flex items-center gap-1 bg-white/10 text-white/40 border border-white/10 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            No Subscription
-          </span>
-        )}
-      </div>
-
-      {/* Expiry info */}
-      {expiry > 0 && (
-        <div className="space-y-1">
-          <p className="text-white/50 text-xs">
-            {isExpired ? "Expired on" : "Valid until"}{" "}
-            <span className="text-white/80 font-semibold">
-              {formatExpiryDate(expiry)}
-            </span>
-          </p>
-          {isActive && daysRemaining > 0 && (
-            <p
-              className={`text-xs font-medium ${
-                isNearingExpiry ? "text-amber-400" : "text-emerald-400"
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        data-ocid="profile.subscription.card"
+        className="rounded-2xl p-4 space-y-3"
+        style={cardStyle}
+      >
+        {/* Header row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Crown
+              className={`w-4 h-4 ${
+                isActive && !isNearingExpiry
+                  ? "text-emerald-400"
+                  : isNearingExpiry
+                    ? "text-amber-400"
+                    : isExpired
+                      ? "text-red-400"
+                      : "text-white/40"
               }`}
-            >
-              {daysRemaining} day{daysRemaining === 1 ? "" : "s"} remaining
-            </p>
-          )}
-          {isExpired && daysRemaining <= 0 && expiry > 0 && (
-            <p className="text-xs font-medium text-red-400">
-              Expired {Math.abs(daysRemaining)} day
-              {Math.abs(daysRemaining) === 1 ? "" : "s"} ago
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Plan info */}
-      <div className="rounded-xl bg-white/5 px-3 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-white/60 text-xs">Annual Plan</span>
-        </div>
-        <span className="text-white font-bold text-sm">₹{subPrice} / year</span>
-      </div>
-
-      {/* CTA button */}
-      {(showRenew || showSubscribe) && (
-        <Button
-          data-ocid={
-            showSubscribe
-              ? "profile.subscription.subscribe_button"
-              : "profile.subscription.renew_button"
-          }
-          onClick={handleSubscribe}
-          disabled={loading}
-          className="w-full h-10 font-semibold text-sm"
-          style={{
-            background: loading
-              ? "oklch(0.3 0.04 60)"
-              : "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))",
-          }}
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Processing...
+            />
+            <span className="text-white font-semibold text-sm">
+              Artist Subscription
             </span>
-          ) : (
+          </div>
+          {/* Status pill */}
+          {isActive && !isNearingExpiry && (
+            <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <CheckCircle2 className="w-3 h-3" /> Active
+            </span>
+          )}
+          {isNearingExpiry && (
+            <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <Clock className="w-3 h-3" /> Expiring Soon
+            </span>
+          )}
+          {isExpired && (
+            <span className="inline-flex items-center gap-1 bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <XCircle className="w-3 h-3" /> Expired
+            </span>
+          )}
+          {isNone && (
+            <span className="inline-flex items-center gap-1 bg-white/10 text-white/40 border border-white/10 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              No Subscription
+            </span>
+          )}
+        </div>
+
+        {/* Expiry info */}
+        {expiry > 0 && (
+          <div className="space-y-1">
+            <p className="text-white/50 text-xs">
+              {isExpired ? "Expired on" : "Valid until"}{" "}
+              <span className="text-white/80 font-semibold">
+                {formatExpiryDate(expiry)}
+              </span>
+            </p>
+            {isActive && daysRemaining > 0 && (
+              <p
+                className={`text-xs font-medium ${
+                  isNearingExpiry ? "text-amber-400" : "text-emerald-400"
+                }`}
+              >
+                {daysRemaining} day{daysRemaining === 1 ? "" : "s"} remaining
+              </p>
+            )}
+            {isExpired && daysRemaining <= 0 && expiry > 0 && (
+              <p className="text-xs font-medium text-red-400">
+                Expired {Math.abs(daysRemaining)} day
+                {Math.abs(daysRemaining) === 1 ? "" : "s"} ago
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Plan info */}
+        <div className="rounded-xl bg-white/5 px-3 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-white/60 text-xs">Annual Plan</span>
+          </div>
+          <span className="text-white font-bold text-sm">
+            ₹{subPrice} / year
+          </span>
+        </div>
+
+        {/* CTA button */}
+        {(showRenew || showSubscribe) && (
+          <Button
+            data-ocid={
+              showSubscribe
+                ? "profile.subscription.subscribe_button"
+                : "profile.subscription.renew_button"
+            }
+            onClick={handleSubscribe}
+            className="w-full h-10 font-semibold text-sm"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))",
+            }}
+          >
             <span className="flex items-center gap-2">
               <Crown className="w-4 h-4" />
               {showSubscribe
                 ? `Subscribe ₹${subPrice} / year`
                 : `Renew ₹${subPrice} / year`}
             </span>
-          )}
-        </Button>
+          </Button>
+        )}
+      </motion.div>
+      {showPayModal && (
+        <button
+          type="button"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70"
+          onClick={() => setShowPayModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowPayModal(false);
+          }}
+          aria-label="Close modal"
+        >
+          <div className="w-full max-w-md rounded-t-3xl bg-[oklch(0.12_0.02_260)] border-t border-white/10 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg">
+                Subscribe — ₹{subPrice}/year
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPayModal(false)}
+                className="text-white/40 hover:text-white text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {!state.adminPaymentSettings ? (
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 text-amber-300 text-sm">
+                Admin has not set up payment info yet. Please contact admin at
+                support@faktahirani.app
+              </div>
+            ) : (
+              <>
+                {/* Payment details */}
+                <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-3">
+                  <p className="text-white/60 text-xs uppercase tracking-wider font-medium">
+                    Payment Details
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/50 text-sm">UPI ID</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-sm font-mono">
+                        {state.adminPaymentSettings.upiId}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            state.adminPaymentSettings!.upiId,
+                          );
+                          toast.success("UPI ID copied!");
+                        }}
+                        className="text-white/40 hover:text-white"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/50 text-sm">Name</span>
+                    <span className="text-white text-sm">
+                      {state.adminPaymentSettings.upiName}
+                    </span>
+                  </div>
+                  <div className="border-t border-white/10 pt-3 space-y-2">
+                    <p className="text-white/60 text-xs">Bank Transfer</p>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/50">Bank</span>
+                      <span className="text-white">
+                        {state.adminPaymentSettings.bankName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/50">Account</span>
+                      <span className="text-white font-mono">
+                        {state.adminPaymentSettings.accountNumber}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/50">IFSC</span>
+                      <span className="text-white font-mono">
+                        {state.adminPaymentSettings.ifsc}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/50">Holder</span>
+                      <span className="text-white">
+                        {state.adminPaymentSettings.accountHolder}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-amber-300 text-xs text-center">
+                    Pay ₹{subPrice} to above details, then enter your
+                    UTR/reference below
+                  </div>
+                </div>
+
+                {/* Payment method selector */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPayMethod("upi")}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${payMethod === "upi" ? "bg-emerald-600 text-white" : "bg-white/5 text-white/50"}`}
+                  >
+                    UPI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayMethod("bank")}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${payMethod === "bank" ? "bg-blue-600 text-white" : "bg-white/5 text-white/50"}`}
+                  >
+                    Bank Transfer
+                  </button>
+                </div>
+
+                {/* Reference input */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="prof-pay-ref"
+                    className="text-white/60 text-sm"
+                  >
+                    Payment Reference / UTR Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={payRef}
+                    onChange={(e) => setPayRef(e.target.value)}
+                    id="prof-pay-ref"
+                    placeholder="Enter UTR / Transaction ID"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm outline-none focus:border-white/30"
+                    data-ocid="profile.subscription.input"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  data-ocid="profile.subscription.submit_button"
+                  onClick={handleSubmitPayment}
+                  disabled={submitting}
+                  className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-opacity disabled:opacity-50"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))",
+                  }}
+                >
+                  {submitting ? "Submitting..." : "Submit Payment for Approval"}
+                </button>
+              </>
+            )}
+          </div>
+        </button>
       )}
-    </motion.div>
+    </>
   );
 }
 
@@ -785,382 +965,373 @@ function EditProfileSheet({
     onClose();
   };
 
+  if (!open) return null;
+
   return (
-    <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent
-        side="bottom"
-        data-ocid="profile.edit.sheet"
-        className="bg-card border-t border-white/10 rounded-t-3xl p-0 flex flex-col"
-        style={{ maxHeight: "92dvh" }}
-      >
-        {/* Header */}
-        <SheetHeader className="px-5 py-4 border-b border-white/10 shrink-0">
-          <div className="flex items-center justify-between">
+    <div
+      data-ocid="profile.edit.sheet"
+      className="fixed inset-0 z-50 flex flex-col bg-[#0a0a0a] animate-in slide-in-from-bottom duration-300"
+    >
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-white/10 shrink-0 flex items-center justify-between">
+        <button
+          type="button"
+          data-ocid="edit_profile.cancel_button"
+          onClick={onClose}
+          className="text-white/50 hover:text-white text-sm transition-colors"
+        >
+          रद्द करा / Cancel
+        </button>
+        <span className="text-white text-base font-bold">
+          Edit Profile / प्रोफाइल बदला
+        </span>
+        <button
+          type="button"
+          data-ocid="edit_profile.save_button"
+          onClick={handleSave}
+          disabled={saving}
+          className="text-sm font-semibold transition-colors disabled:opacity-50"
+          style={{ color: "oklch(0.7 0.2 15)" }}
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+        </button>
+      </div>
+
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+        {/* ── Photos Section ───────────────────────────────────────────── */}
+        <section>
+          <SectionHeader>Photos</SectionHeader>
+
+          {/* Cover photo */}
+          <div className="mt-3 relative">
             <button
               type="button"
-              data-ocid="edit_profile.cancel_button"
-              onClick={onClose}
-              className="text-white/50 hover:text-white text-sm transition-colors"
+              data-ocid="edit_profile.cover_photo.upload_button"
+              onClick={() => coverFileRef.current?.click()}
+              className="w-full h-28 rounded-2xl overflow-hidden border border-white/15 relative group"
+              style={{
+                background: coverPhoto
+                  ? undefined
+                  : "linear-gradient(135deg, oklch(0.15 0.04 250), oklch(0.12 0.03 200))",
+              }}
             >
-              Cancel
+              {coverPhoto ? (
+                <img
+                  src={coverPhoto}
+                  alt="Cover"
+                  className="w-full h-full object-cover"
+                />
+              ) : null}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/30 group-hover:bg-black/50 transition-colors">
+                <Camera className="w-5 h-5 text-white/80" />
+                <span className="text-white/70 text-xs font-medium">
+                  {coverPhoto ? "Change Cover" : "Add Cover Photo"}
+                </span>
+              </div>
             </button>
-            <SheetTitle className="text-white text-base font-bold">
-              Edit Profile
-            </SheetTitle>
-            <button
-              type="button"
-              data-ocid="edit_profile.save_button"
-              onClick={handleSave}
-              disabled={saving}
-              className="text-sm font-semibold transition-colors disabled:opacity-50"
-              style={{ color: "oklch(0.7 0.2 15)" }}
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
-            </button>
+            <input
+              ref={coverFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleCoverChange(f);
+              }}
+            />
           </div>
-        </SheetHeader>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
-          {/* ── Photos Section ───────────────────────────────────────────── */}
-          <section>
-            <SectionHeader>Photos</SectionHeader>
-
-            {/* Cover photo */}
-            <div className="mt-3 relative">
+          {/* Profile photo — overlapping */}
+          <div className="mt-4 flex items-center gap-4">
+            <div className="relative shrink-0">
+              <Avatar className="w-20 h-20 border-2 border-white/20">
+                <AvatarImage src={avatar} />
+                <AvatarFallback className="bg-white/10 text-white text-2xl font-bold">
+                  {username[0]?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
               <button
                 type="button"
-                data-ocid="edit_profile.cover_photo.upload_button"
-                onClick={() => coverFileRef.current?.click()}
-                className="w-full h-28 rounded-2xl overflow-hidden border border-white/15 relative group"
-                style={{
-                  background: coverPhoto
-                    ? undefined
-                    : "linear-gradient(135deg, oklch(0.15 0.04 250), oklch(0.12 0.03 200))",
-                }}
+                data-ocid="edit_profile.profile_photo.upload_button"
+                onClick={() => avatarFileRef.current?.click()}
+                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full border-2 border-card flex items-center justify-center"
+                style={{ background: "oklch(0.65 0.28 15)" }}
               >
-                {coverPhoto ? (
-                  <img
-                    src={coverPhoto}
-                    alt="Cover"
-                    className="w-full h-full object-cover"
-                  />
-                ) : null}
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/30 group-hover:bg-black/50 transition-colors">
-                  <Camera className="w-5 h-5 text-white/80" />
-                  <span className="text-white/70 text-xs font-medium">
-                    {coverPhoto ? "Change Cover" : "Add Cover Photo"}
-                  </span>
-                </div>
+                <Camera className="w-3.5 h-3.5 text-white" />
               </button>
               <input
-                ref={coverFileRef}
+                ref={avatarFileRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) handleCoverChange(f);
+                  if (f) handleAvatarChange(f);
                 }}
               />
             </div>
-
-            {/* Profile photo — overlapping */}
-            <div className="mt-4 flex items-center gap-4">
-              <div className="relative shrink-0">
-                <Avatar className="w-20 h-20 border-2 border-white/20">
-                  <AvatarImage src={avatar} />
-                  <AvatarFallback className="bg-white/10 text-white text-2xl font-bold">
-                    {username[0]?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <button
-                  type="button"
-                  data-ocid="edit_profile.profile_photo.upload_button"
-                  onClick={() => avatarFileRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full border-2 border-card flex items-center justify-center"
-                  style={{ background: "oklch(0.65 0.28 15)" }}
-                >
-                  <Camera className="w-3.5 h-3.5 text-white" />
-                </button>
-                <input
-                  ref={avatarFileRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleAvatarChange(f);
-                  }}
-                />
-              </div>
-              <div>
-                <p className="text-white text-sm font-semibold">
-                  Profile Photo
-                </p>
-                <button
-                  type="button"
-                  onClick={() => avatarFileRef.current?.click()}
-                  className="text-xs mt-0.5 transition-colors"
-                  style={{ color: "oklch(0.7 0.2 15)" }}
-                >
-                  Change photo
-                </button>
-              </div>
+            <div>
+              <p className="text-white text-sm font-semibold">Profile Photo</p>
+              <button
+                type="button"
+                onClick={() => avatarFileRef.current?.click()}
+                className="text-xs mt-0.5 transition-colors"
+                style={{ color: "oklch(0.7 0.2 15)" }}
+              >
+                Change photo
+              </button>
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* ── Basic Info ───────────────────────────────────────────────── */}
+        {/* ── Basic Info ───────────────────────────────────────────────── */}
+        <section className="space-y-3">
+          <SectionHeader>Basic Info</SectionHeader>
+
+          <FieldInput
+            label="Full Name"
+            id="edit-fullname"
+            data-ocid="edit_profile.fullname.input"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="पूर्ण नाव / Full Name"
+          />
+
+          <FieldInput
+            label="Username"
+            id="edit-username"
+            data-ocid="edit_profile.username.input"
+            value={username}
+            onChange={(e) =>
+              setUsername(
+                e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""),
+              )
+            }
+            placeholder="username"
+          />
+
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="edit-bio"
+              className="text-white/60 text-xs font-medium"
+            >
+              Bio
+            </Label>
+            <textarea
+              id="edit-bio"
+              data-ocid="edit_profile.bio.textarea"
+              value={bio}
+              onChange={(e) => setBio(e.target.value.slice(0, 150))}
+              placeholder="Tell the world about yourself..."
+              rows={3}
+              className="w-full rounded-xl bg-white/8 border border-white/12 text-white text-sm outline-none focus:border-white/30 transition-colors placeholder:text-white/25 px-3 py-2.5 resize-none"
+            />
+            <p className="text-white/30 text-[11px] text-right">
+              {bio.length}/150
+            </p>
+          </div>
+
+          <FieldInput
+            label="Location"
+            id="edit-location"
+            data-ocid="edit_profile.location.input"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="City, State"
+            icon={<MapPin className="w-3.5 h-3.5" />}
+          />
+        </section>
+
+        {/* ── Social Links ─────────────────────────────────────────────── */}
+        <section className="space-y-3">
+          <SectionHeader>Social Links</SectionHeader>
+
+          <FieldInput
+            label="WhatsApp"
+            id="edit-whatsapp"
+            data-ocid="edit_profile.whatsapp.input"
+            type="tel"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.value)}
+            placeholder="+91 9876543210"
+            icon={<Phone className="w-3.5 h-3.5" />}
+          />
+          <FieldInput
+            label="Instagram"
+            id="edit-instagram"
+            data-ocid="edit_profile.instagram.input"
+            value={instagram}
+            onChange={(e) => setInstagram(e.target.value)}
+            placeholder="@username or URL"
+            icon={<Instagram className="w-3.5 h-3.5" />}
+          />
+          <FieldInput
+            label="YouTube"
+            id="edit-youtube"
+            data-ocid="edit_profile.youtube.input"
+            type="url"
+            value={youtube}
+            onChange={(e) => setYoutube(e.target.value)}
+            placeholder="https://youtube.com/..."
+            icon={<Youtube className="w-3.5 h-3.5" />}
+          />
+          <FieldInput
+            label="Facebook"
+            id="edit-facebook"
+            data-ocid="edit_profile.facebook.input"
+            type="url"
+            value={facebook}
+            onChange={(e) => setFacebook(e.target.value)}
+            placeholder="https://facebook.com/..."
+            icon={<Facebook className="w-3.5 h-3.5" />}
+          />
+          <FieldInput
+            label="Other Link"
+            id="edit-custom-link"
+            data-ocid="edit_profile.custom.input"
+            type="url"
+            value={customLink}
+            onChange={(e) => setCustomLink(e.target.value)}
+            placeholder="Any other link"
+            icon={<Link2 className="w-3.5 h-3.5" />}
+          />
+        </section>
+
+        {/* ── Artist Only Section ──────────────────────────────────────── */}
+        {isArtist && (
           <section className="space-y-3">
-            <SectionHeader>Basic Info</SectionHeader>
-
-            <FieldInput
-              label="Full Name"
-              id="edit-fullname"
-              data-ocid="edit_profile.fullname.input"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="पूर्ण नाव / Full Name"
-            />
-
-            <FieldInput
-              label="Username"
-              id="edit-username"
-              data-ocid="edit_profile.username.input"
-              value={username}
-              onChange={(e) =>
-                setUsername(
-                  e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""),
-                )
-              }
-              placeholder="username"
-            />
+            <SectionHeader>Artist Details</SectionHeader>
 
             <div className="space-y-1.5">
-              <Label
-                htmlFor="edit-bio"
-                className="text-white/60 text-xs font-medium"
-              >
-                Bio
+              <Label className="text-white/60 text-xs font-medium">
+                Category
               </Label>
-              <textarea
-                id="edit-bio"
-                data-ocid="edit_profile.bio.textarea"
-                value={bio}
-                onChange={(e) => setBio(e.target.value.slice(0, 150))}
-                placeholder="Tell the world about yourself..."
-                rows={3}
-                className="w-full rounded-xl bg-white/8 border border-white/12 text-white text-sm outline-none focus:border-white/30 transition-colors placeholder:text-white/25 px-3 py-2.5 resize-none"
-              />
-              <p className="text-white/30 text-[11px] text-right">
-                {bio.length}/150
-              </p>
+              <Select value={artistCategory} onValueChange={setArtistCategory}>
+                <SelectTrigger
+                  data-ocid="edit_profile.category.select"
+                  className="h-11 rounded-xl bg-white/8 border-white/12 text-white"
+                >
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-white/15">
+                  {[
+                    "Singer",
+                    "Actor",
+                    "Comedian",
+                    "Creator",
+                    "Dancer",
+                    "Director",
+                  ].map((cat) => (
+                    <SelectItem
+                      key={cat}
+                      value={cat}
+                      className="text-white hover:bg-white/10"
+                    >
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <FieldInput
-              label="Location"
-              id="edit-location"
-              data-ocid="edit_profile.location.input"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="City, State"
-              icon={<MapPin className="w-3.5 h-3.5" />}
+              label="Contact Email"
+              id="edit-contact-email"
+              data-ocid="edit_profile.email.input"
+              type="email"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              placeholder="your@email.com"
             />
-          </section>
 
-          {/* ── Social Links ─────────────────────────────────────────────── */}
-          <section className="space-y-3">
-            <SectionHeader>Social Links</SectionHeader>
-
-            <FieldInput
-              label="WhatsApp"
-              id="edit-whatsapp"
-              data-ocid="edit_profile.whatsapp.input"
-              type="tel"
-              value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value)}
-              placeholder="+91 9876543210"
-              icon={<Phone className="w-3.5 h-3.5" />}
-            />
-            <FieldInput
-              label="Instagram"
-              id="edit-instagram"
-              data-ocid="edit_profile.instagram.input"
-              value={instagram}
-              onChange={(e) => setInstagram(e.target.value)}
-              placeholder="@username or URL"
-              icon={<Instagram className="w-3.5 h-3.5" />}
-            />
-            <FieldInput
-              label="YouTube"
-              id="edit-youtube"
-              data-ocid="edit_profile.youtube.input"
-              type="url"
-              value={youtube}
-              onChange={(e) => setYoutube(e.target.value)}
-              placeholder="https://youtube.com/..."
-              icon={<Youtube className="w-3.5 h-3.5" />}
-            />
-            <FieldInput
-              label="Facebook"
-              id="edit-facebook"
-              data-ocid="edit_profile.facebook.input"
-              type="url"
-              value={facebook}
-              onChange={(e) => setFacebook(e.target.value)}
-              placeholder="https://facebook.com/..."
-              icon={<Facebook className="w-3.5 h-3.5" />}
-            />
-            <FieldInput
-              label="Other Link"
-              id="edit-custom-link"
-              data-ocid="edit_profile.custom.input"
-              type="url"
-              value={customLink}
-              onChange={(e) => setCustomLink(e.target.value)}
-              placeholder="Any other link"
-              icon={<Link2 className="w-3.5 h-3.5" />}
-            />
-          </section>
-
-          {/* ── Artist Only Section ──────────────────────────────────────── */}
-          {isArtist && (
-            <section className="space-y-3">
-              <SectionHeader>Artist Details</SectionHeader>
-
-              <div className="space-y-1.5">
-                <Label className="text-white/60 text-xs font-medium">
-                  Category
-                </Label>
-                <Select
-                  value={artistCategory}
-                  onValueChange={setArtistCategory}
+            {/* Portfolio Links */}
+            <div className="space-y-2">
+              <Label className="text-white/60 text-xs font-medium">
+                Portfolio Links
+              </Label>
+              {portfolioLinks.map((link, idx) => (
+                <div
+                  key={`portfolio-${
+                    // biome-ignore lint/suspicious/noArrayIndexKey: index is stable for user edits
+                    idx
+                  }`}
+                  className="flex items-center gap-2"
                 >
-                  <SelectTrigger
-                    data-ocid="edit_profile.category.select"
-                    className="h-11 rounded-xl bg-white/8 border-white/12 text-white"
-                  >
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-white/15">
-                    {[
-                      "Singer",
-                      "Actor",
-                      "Comedian",
-                      "Creator",
-                      "Dancer",
-                      "Director",
-                    ].map((cat) => (
-                      <SelectItem
-                        key={cat}
-                        value={cat}
-                        className="text-white hover:bg-white/10"
-                      >
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <FieldInput
-                label="Contact Email"
-                id="edit-contact-email"
-                data-ocid="edit_profile.email.input"
-                type="email"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                placeholder="your@email.com"
-              />
-
-              {/* Portfolio Links */}
-              <div className="space-y-2">
-                <Label className="text-white/60 text-xs font-medium">
-                  Portfolio Links
-                </Label>
-                {portfolioLinks.map((link, idx) => (
-                  <div
-                    key={`portfolio-${
-                      // biome-ignore lint/suspicious/noArrayIndexKey: index is stable for user edits
-                      idx
-                    }`}
-                    className="flex items-center gap-2"
-                  >
-                    <div className="flex-1 h-10 rounded-xl bg-white/8 border border-white/12 px-3 flex items-center gap-2 min-w-0">
-                      <Link2 className="w-3.5 h-3.5 text-white/30 shrink-0" />
-                      <span className="text-white/70 text-sm truncate">
-                        {link}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      data-ocid={`edit_profile.portfolio.delete_button.${idx + 1}`}
-                      onClick={() => removePortfolioLink(idx)}
-                      className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0 hover:bg-red-500/25 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                    </button>
+                  <div className="flex-1 h-10 rounded-xl bg-white/8 border border-white/12 px-3 flex items-center gap-2 min-w-0">
+                    <Link2 className="w-3.5 h-3.5 text-white/30 shrink-0" />
+                    <span className="text-white/70 text-sm truncate">
+                      {link}
+                    </span>
                   </div>
-                ))}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="url"
-                    value={newPortfolioLink}
-                    data-ocid="edit_profile.portfolio.input"
-                    onChange={(e) => setNewPortfolioLink(e.target.value)}
-                    placeholder="https://youtube.com/..."
-                    className="flex-1 h-10 rounded-xl bg-white/8 border border-white/12 text-white text-sm px-3 outline-none focus:border-white/30 transition-colors placeholder:text-white/25"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addPortfolioLink();
-                      }
-                    }}
-                  />
                   <button
                     type="button"
-                    data-ocid="edit_profile.portfolio.button"
-                    onClick={addPortfolioLink}
-                    disabled={!newPortfolioLink.trim()}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors disabled:opacity-40"
-                    style={{ background: "oklch(0.65 0.28 15 / 0.3)" }}
+                    data-ocid={`edit_profile.portfolio.delete_button.${idx + 1}`}
+                    onClick={() => removePortfolioLink(idx)}
+                    className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0 hover:bg-red-500/25 transition-colors"
                   >
-                    <Plus className="w-4 h-4 text-white" />
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
                   </button>
                 </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  value={newPortfolioLink}
+                  data-ocid="edit_profile.portfolio.input"
+                  onChange={(e) => setNewPortfolioLink(e.target.value)}
+                  placeholder="https://youtube.com/..."
+                  className="flex-1 h-10 rounded-xl bg-white/8 border border-white/12 text-white text-sm px-3 outline-none focus:border-white/30 transition-colors placeholder:text-white/25"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addPortfolioLink();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  data-ocid="edit_profile.portfolio.button"
+                  onClick={addPortfolioLink}
+                  disabled={!newPortfolioLink.trim()}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors disabled:opacity-40"
+                  style={{ background: "oklch(0.65 0.28 15 / 0.3)" }}
+                >
+                  <Plus className="w-4 h-4 text-white" />
+                </button>
               </div>
-            </section>
+            </div>
+          </section>
+        )}
+
+        {/* Bottom spacer */}
+        <div className="h-4" />
+      </div>
+
+      {/* Sticky footer */}
+      <div className="sticky bottom-0 px-5 pb-6 pt-3 border-t border-white/10 shrink-0 bg-[#0a0a0a]">
+        <Button
+          data-ocid="edit_profile.save_button"
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full h-12 font-semibold text-sm rounded-xl"
+          style={{
+            background: saving
+              ? "oklch(0.3 0.04 15)"
+              : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.6 0.25 350))",
+          }}
+        >
+          {saving ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saving...
+            </span>
+          ) : (
+            "Save Changes / बदल जतन करा"
           )}
-
-          {/* Bottom spacer */}
-          <div className="h-4" />
-        </div>
-
-        {/* Sticky footer */}
-        <SheetFooter className="px-5 pb-6 pt-3 border-t border-white/10 shrink-0">
-          <Button
-            data-ocid="edit_profile.save_button"
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full h-12 font-semibold text-sm rounded-xl"
-            style={{
-              background: saving
-                ? "oklch(0.3 0.04 15)"
-                : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.6 0.25 350))",
-            }}
-          >
-            {saving ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving...
-              </span>
-            ) : (
-              "Save Changes / बदल जतन करा"
-            )}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </Button>
+      </div>
+    </div>
   );
 }
 

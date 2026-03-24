@@ -593,6 +593,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     | "overview"
     | "users"
     | "artists"
+    | "subscriptions"
     | "videos"
     | "comments"
     | "withdrawals"
@@ -615,6 +616,8 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [adminHashtags, setAdminHashtags] = useState<string[]>([]);
   const [adminVideoType, setAdminVideoType] = useState<VideoType>("reel");
   const [adminPosting, setAdminPosting] = useState(false);
+  const [rejectSubId, setRejectSubId] = useState<string | null>(null);
+  const [rejectSubReason, setRejectSubReason] = useState("");
   const [previewVideo, setPreviewVideo] = useState<{
     url: string;
     caption: string;
@@ -845,6 +848,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     "overview",
     "users",
     "artists",
+    "subscriptions",
     "videos",
     "comments",
     "withdrawals",
@@ -919,6 +923,18 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 {pendingWithdrawals.length}
               </span>
             )}
+            {tab === "subscriptions" &&
+              (state.subscriptionRequests ?? []).filter(
+                (r) => r.status === "pending",
+              ).length > 0 && (
+                <span className="ml-1.5 bg-amber-500 text-black text-[10px] font-bold rounded-full px-1.5 py-0.5">
+                  {
+                    (state.subscriptionRequests ?? []).filter(
+                      (r) => r.status === "pending",
+                    ).length
+                  }
+                </span>
+              )}
             {tab === "ads" && activeLocalAds.length > 0 && (
               <span className="ml-1.5 bg-emerald-500 text-black text-[10px] font-bold rounded-full px-1.5 py-0.5">
                 {activeLocalAds.length}
@@ -4469,6 +4485,159 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                 </TableBody>
               </Table>
             </div>
+          </div>
+        )}
+
+        {/* Subscriptions tab */}
+        {activeTab === "subscriptions" && (
+          <div className="space-y-4">
+            <h2 className="text-white/60 text-sm font-medium uppercase tracking-wider">
+              Subscription Requests (
+              {state.subscriptionRequests?.filter((r) => r.status === "pending")
+                .length ?? 0}{" "}
+              pending)
+            </h2>
+            {!state.subscriptionRequests ||
+            state.subscriptionRequests.length === 0 ? (
+              <div
+                data-ocid="admin.subscriptions.empty_state"
+                className="text-center py-12 text-white/30"
+              >
+                No subscription requests yet
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {[...(state.subscriptionRequests ?? [])]
+                  .sort((a, b) => b.createdAt - a.createdAt)
+                  .map((req, idx) => (
+                    <div
+                      key={req.id}
+                      data-ocid={`admin.subscriptions.item.${idx + 1}`}
+                      className="rounded-2xl border border-white/10 bg-card p-4 space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-white font-semibold text-sm">
+                            {req.userName}
+                          </p>
+                          <p className="text-white/40 text-xs">
+                            {req.userEmail}
+                          </p>
+                          <p className="text-white/40 text-xs">
+                            {new Date(req.createdAt).toLocaleString("en-IN")}
+                          </p>
+                        </div>
+                        <span
+                          className={`text-xs font-bold px-2 py-1 rounded-full ${req.status === "pending" ? "bg-amber-500/20 text-amber-400" : req.status === "approved" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}
+                        >
+                          {req.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-white/60">
+                          Amount:{" "}
+                          <span className="text-white font-semibold">
+                            ₹{req.amount}
+                          </span>
+                        </span>
+                        <span className="text-white/60">
+                          Method:{" "}
+                          <span className="text-white">
+                            {req.paymentMethod.toUpperCase()}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="rounded-xl bg-white/5 px-3 py-2 flex items-center justify-between">
+                        <span className="text-white/40 text-xs">
+                          UTR / Reference
+                        </span>
+                        <span className="text-white font-mono text-sm">
+                          {req.paymentReference}
+                        </span>
+                      </div>
+                      {req.status === "pending" &&
+                        (rejectSubId === req.id ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              placeholder="Rejection reason..."
+                              value={rejectSubReason}
+                              onChange={(e) =>
+                                setRejectSubReason(e.target.value)
+                              }
+                              className="w-full bg-white/5 border border-red-500/30 rounded-xl px-3 py-2 text-white text-sm outline-none"
+                              data-ocid="admin.subscriptions.input"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                data-ocid="admin.subscriptions.confirm_button"
+                                onClick={() => {
+                                  dispatch({
+                                    type: "REJECT_SUBSCRIPTION",
+                                    requestId: req.id,
+                                    reason:
+                                      rejectSubReason ||
+                                      "Request rejected by admin",
+                                  });
+                                  setRejectSubId(null);
+                                  setRejectSubReason("");
+                                  toast.error("Subscription request rejected");
+                                }}
+                                className="flex-1 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold"
+                              >
+                                Confirm Reject
+                              </button>
+                              <button
+                                type="button"
+                                data-ocid="admin.subscriptions.cancel_button"
+                                onClick={() => {
+                                  setRejectSubId(null);
+                                  setRejectSubReason("");
+                                }}
+                                className="flex-1 py-2 rounded-xl bg-white/10 text-white/60 text-sm"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              data-ocid="admin.subscriptions.confirm_button"
+                              onClick={() => {
+                                dispatch({
+                                  type: "APPROVE_SUBSCRIPTION",
+                                  requestId: req.id,
+                                });
+                                toast.success(
+                                  `Subscription approved for ${req.userName}!`,
+                                );
+                              }}
+                              className="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold"
+                            >
+                              ✅ Approve
+                            </button>
+                            <button
+                              type="button"
+                              data-ocid="admin.subscriptions.delete_button"
+                              onClick={() => setRejectSubId(req.id)}
+                              className="flex-1 py-2 rounded-xl bg-red-600/20 border border-red-500/30 text-red-400 text-sm font-semibold"
+                            >
+                              ❌ Reject
+                            </button>
+                          </div>
+                        ))}
+                      {req.status === "rejected" && req.rejectionReason && (
+                        <p className="text-red-400/60 text-xs">
+                          Reason: {req.rejectionReason}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 

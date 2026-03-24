@@ -14,9 +14,18 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="फक्त अहिराणी" />
     <meta name="twitter:description" content="अहिराणी कलाकार आणि प्रेक्षकांसाठी खास रील प्लॅटफॉर्म" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/assets/uploads/file_000000008fec720794168ea3a1969798-1-1-1.png" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').catch(function() {});
+        });
+      }
+    </script>
   </body>
 </html>

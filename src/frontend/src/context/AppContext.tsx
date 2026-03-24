@@ -364,6 +364,20 @@ export interface AdminPaymentSettings {
   ifsc: string;
 }
 
+export interface SubscriptionRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  amount: number;
+  paymentMethod: "upi" | "bank";
+  paymentReference: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: number;
+  processedAt?: number;
+  rejectionReason?: string;
+}
+
 export interface AppState {
   currentUser: User | null;
   users: User[];
@@ -390,6 +404,7 @@ export interface AppState {
   subscriptionPrice: number;
   adminPaymentSettings: AdminPaymentSettings | null;
   adminWithdrawals: AdminWithdrawal[];
+  subscriptionRequests: SubscriptionRequest[];
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -484,7 +499,10 @@ type Action =
   | { type: "RESTORE_VIDEO_URL"; videoId: string; url: string }
   | { type: "SET_ADMIN_PAYMENT_SETTINGS"; settings: AdminPaymentSettings }
   | { type: "ADD_ADMIN_WITHDRAWAL"; withdrawal: AdminWithdrawal }
-  | { type: "MARK_ADMIN_WITHDRAWAL_PAID"; id: string };
+  | { type: "MARK_ADMIN_WITHDRAWAL_PAID"; id: string }
+  | { type: "REQUEST_SUBSCRIPTION"; request: SubscriptionRequest }
+  | { type: "APPROVE_SUBSCRIPTION"; requestId: string }
+  | { type: "REJECT_SUBSCRIPTION"; requestId: string; reason: string };
 
 // ─── Default RPM ─────────────────────────────────────────────────────────────
 
@@ -1418,6 +1436,16 @@ function getInitialState(): AppState {
               return [];
             }
           })(),
+        subscriptionRequests:
+          parsed.subscriptionRequests ??
+          (() => {
+            try {
+              const s = localStorage.getItem("subscriptionRequests");
+              return s ? JSON.parse(s) : [];
+            } catch {
+              return [];
+            }
+          })(),
       };
     }
   } catch {
@@ -1460,6 +1488,14 @@ function getInitialState(): AppState {
     adminWithdrawals: (() => {
       try {
         const s = localStorage.getItem("adminWithdrawals");
+        return s ? JSON.parse(s) : [];
+      } catch {
+        return [];
+      }
+    })(),
+    subscriptionRequests: (() => {
+      try {
+        const s = localStorage.getItem("subscriptionRequests");
         return s ? JSON.parse(s) : [];
       } catch {
         return [];
@@ -3380,6 +3416,101 @@ function reducer(state: AppState, action: Action): AppState {
           v.id === action.videoId ? { ...v, url: action.url } : v,
         ),
       };
+
+    case "REQUEST_SUBSCRIPTION": {
+      const updated = [...state.subscriptionRequests, action.request];
+      localStorage.setItem("subscriptionRequests", JSON.stringify(updated));
+      return { ...state, subscriptionRequests: updated };
+    }
+
+    case "APPROVE_SUBSCRIPTION": {
+      const req = state.subscriptionRequests.find(
+        (r) => r.id === action.requestId,
+      );
+      if (!req) return state;
+      const now = Date.now();
+      const expiry = now + 86400000 * 365;
+      const updatedRequests = state.subscriptionRequests.map((r) =>
+        r.id === action.requestId
+          ? { ...r, status: "approved" as const, processedAt: now }
+          : r,
+      );
+      localStorage.setItem(
+        "subscriptionRequests",
+        JSON.stringify(updatedRequests),
+      );
+      // Activate subscription for user
+      const updatedUsers = state.users.map((u) =>
+        u.id === req.userId
+          ? {
+              ...u,
+              subscriptionStatus: "active" as SubscriptionStatus,
+              subscriptionExpiry: expiry,
+              role: "artist" as UserRole,
+            }
+          : u,
+      );
+      const updatedCurrentUser =
+        state.currentUser?.id === req.userId
+          ? {
+              ...state.currentUser,
+              subscriptionStatus: "active" as SubscriptionStatus,
+              subscriptionExpiry: expiry,
+              role: "artist" as UserRole,
+            }
+          : state.currentUser;
+      const approvalNotif: Notification = {
+        id: `notif_sub_approved_${now}`,
+        userId: req.userId,
+        type: "follow",
+        message:
+          "✅ Your subscription has been approved! You can now upload videos.",
+        createdAt: now,
+        isRead: false,
+      };
+      return {
+        ...state,
+        subscriptionRequests: updatedRequests,
+        users: updatedUsers,
+        currentUser: updatedCurrentUser,
+        notifications: [approvalNotif, ...state.notifications],
+      };
+    }
+
+    case "REJECT_SUBSCRIPTION": {
+      const req = state.subscriptionRequests.find(
+        (r) => r.id === action.requestId,
+      );
+      if (!req) return state;
+      const now = Date.now();
+      const updatedRequests = state.subscriptionRequests.map((r) =>
+        r.id === action.requestId
+          ? {
+              ...r,
+              status: "rejected" as const,
+              processedAt: now,
+              rejectionReason: action.reason,
+            }
+          : r,
+      );
+      localStorage.setItem(
+        "subscriptionRequests",
+        JSON.stringify(updatedRequests),
+      );
+      const rejectNotif: Notification = {
+        id: `notif_sub_rejected_${now}`,
+        userId: req.userId,
+        type: "follow",
+        message: `❌ Your subscription request was rejected. Reason: ${action.reason || "Please contact admin."}`,
+        createdAt: now,
+        isRead: false,
+      };
+      return {
+        ...state,
+        subscriptionRequests: updatedRequests,
+        notifications: [rejectNotif, ...state.notifications],
+      };
+    }
 
     default:
       return state;

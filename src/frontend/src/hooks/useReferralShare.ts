@@ -2,10 +2,11 @@ import { toast } from "sonner";
 
 /**
  * Generate the canonical referral link for a given code.
- * Format: https://faktahirani.app/join?ref={referralCode}
+ * Uses the current app's origin so it works on any domain (draft, live, custom).
  */
 export function getReferralLink(referralCode: string): string {
-  return `https://faktahirani.app/join?ref=${referralCode}`;
+  const origin = window.location.origin;
+  return `${origin}/join?ref=${referralCode}`;
 }
 
 /**

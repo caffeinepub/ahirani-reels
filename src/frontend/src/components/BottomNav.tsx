@@ -76,7 +76,14 @@ export default function BottomNav() {
 
   const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => {
     if ("artistOnly" in item && item.artistOnly) {
-      return currentUser?.role !== "viewer";
+      // Show upload only for artists with active subscription
+      if (currentUser?.role === "viewer" || !currentUser) return false;
+      if (
+        currentUser.role === "artist" &&
+        currentUser.subscriptionStatus !== "active"
+      )
+        return false;
+      return true;
     }
     return true;
   });

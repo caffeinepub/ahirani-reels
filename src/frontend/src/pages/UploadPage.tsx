@@ -19,7 +19,7 @@ import {
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import type { VideoType } from "../context/AppContext";
+import type { SubscriptionRequest, VideoType } from "../context/AppContext";
 import { useApp } from "../context/AppContext";
 import { sanitizeText } from "../lib/sanitize";
 import { generateId } from "../utils/trending";
@@ -129,7 +129,6 @@ export default function UploadPage() {
     user?.role === "artist" &&
     user?.subscriptionStatus === "active" &&
     (user?.subscriptionExpiry ?? 0) > Date.now();
-  const [subscribing, setSubscribing] = useState(false);
   const [uploadReminderDismissed, setUploadReminderDismissed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -290,13 +289,35 @@ export default function UploadPage() {
     }
   };
 
-  const handleSubscribe = async () => {
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payRef, setPayRef] = useState("");
+  const [payMethod, setPayMethod] = useState<"upi" | "bank">("upi");
+
+  const handleSubscribe = () => {
+    setShowPayModal(true);
+  };
+
+  const handleSubmitPayment = () => {
     if (!user) return;
-    setSubscribing(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    dispatch({ type: "SUBSCRIBE_ARTIST", userId: user.id });
-    setSubscribing(false);
-    toast.success("Subscription activated! You can now upload videos.");
+    if (!payRef.trim()) {
+      toast.error("Please enter your payment reference / UTR number");
+      return;
+    }
+    const req: SubscriptionRequest = {
+      id: `subreq_${Date.now()}`,
+      userId: user.id,
+      userName: user.username,
+      userEmail: user.phone || user.username,
+      amount: subPrice,
+      paymentMethod: payMethod,
+      paymentReference: payRef.trim(),
+      status: "pending",
+      createdAt: Date.now(),
+    };
+    dispatch({ type: "REQUEST_SUBSCRIPTION", request: req });
+    setShowPayModal(false);
+    setPayRef("");
+    toast.success("Payment submitted! Admin will approve within 24 hours.");
   };
 
   const handleClear = () => {
@@ -406,36 +427,23 @@ export default function UploadPage() {
                 <Button
                   data-ocid="upload.renew_subscription_button"
                   onClick={handleSubscribe}
-                  disabled={subscribing}
                   className="w-full h-12 font-bold text-base text-white border-0 transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
                   style={{
-                    background: subscribing
-                      ? "linear-gradient(135deg, oklch(0.35 0.06 75), oklch(0.3 0.05 55))"
-                      : "linear-gradient(135deg, oklch(0.72 0.18 75), oklch(0.65 0.22 55))",
-                    boxShadow: subscribing
-                      ? "none"
-                      : "0 4px 20px oklch(0.65 0.22 55 / 0.35)",
+                    background:
+                      "linear-gradient(135deg, oklch(0.72 0.18 75), oklch(0.65 0.22 55))",
+                    boxShadow: "0 4px 20px oklch(0.65 0.22 55 / 0.35)",
                   }}
                 >
-                  {subscribing ? (
-                    <span className="flex items-center gap-2.5">
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
-                      Activating subscription...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2.5">
-                      <Crown className="w-4 h-4 shrink-0" />
-                      Renew Artist Subscription ₹{subPrice} / Year
-                    </span>
-                  )}
+                  <span className="flex items-center gap-2.5">
+                    <Crown className="w-4 h-4 shrink-0" />
+                    Renew Artist Subscription ₹{subPrice} / Year
+                  </span>
                 </Button>
 
                 {/* Fine print */}
-                {!subscribing && (
-                  <p className="text-white/30 text-xs">
-                    Valid for 365 days · Instant activation
-                  </p>
-                )}
+                <p className="text-white/30 text-xs">
+                  Valid for 365 days · Pay via UPI or Bank Transfer
+                </p>
               </div>
             )}
           </motion.div>
@@ -445,468 +453,625 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-white/10 px-4 py-4">
-        <h1 className="font-display text-xl font-bold text-white">
-          Upload Reel
-        </h1>
-        <p className="text-white/40 text-xs mt-0.5">
-          Share your moment with the world
-        </p>
-      </div>
-
-      <div className="px-4 py-5 space-y-5 pb-24">
-        {/* Subscription expiry reminder banner */}
-        {showUploadReminder && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            data-ocid="upload.subscription.reminder_banner"
-            className="rounded-xl border border-amber-500/40 px-3 py-2 flex items-center gap-2"
-            style={{
-              background:
-                "linear-gradient(135deg, oklch(0.2 0.08 80 / 0.5), oklch(0.16 0.05 60 / 0.4))",
-            }}
-          >
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-            <p className="text-amber-300 text-xs leading-relaxed flex-1">
-              Subscription expires in{" "}
-              <span className="font-bold">
-                {daysLeft} day{daysLeft === 1 ? "" : "s"}
-              </span>
-              . Renew on your Profile to keep uploading.
-            </p>
-            <button
-              type="button"
-              onClick={() => setUploadReminderDismissed(true)}
-              className="text-amber-400/60 hover:text-amber-400 transition-colors shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        )}
-
-        {/* Record with Camera CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-white/10 overflow-hidden"
-          style={{
-            background:
-              "linear-gradient(135deg, oklch(0.12 0.04 15 / 0.8) 0%, oklch(0.1 0.03 350 / 0.6) 100%)",
-          }}
-        >
-          <div className="flex items-center gap-4 px-4 py-4">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
-              }}
-            >
-              <Camera className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white font-semibold text-sm">
-                Record with Camera
-              </p>
-              <p className="text-white/50 text-xs leading-tight mt-0.5">
-                Shoot directly in-app with effects &amp; filters
-              </p>
-            </div>
-            <Button
-              data-ocid="upload.record_camera_button"
-              onClick={() => navigate({ to: "/camera", search: {} })}
-              size="sm"
-              className="shrink-0 font-semibold text-white border-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
-              }}
-            >
-              Record Now
-            </Button>
-          </div>
-        </motion.div>
-
-        {/* Take Photo CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="rounded-2xl border border-white/10 overflow-hidden"
-          style={{
-            background:
-              "linear-gradient(135deg, oklch(0.1 0.04 150 / 0.8) 0%, oklch(0.09 0.03 165 / 0.6) 100%)",
-          }}
-        >
-          <div className="flex items-center gap-4 px-4 py-4">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, oklch(0.55 0.22 150), oklch(0.5 0.2 165))",
-              }}
-            >
-              <ImageIcon className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white font-semibold text-sm">Take a Photo</p>
-              <p className="text-white/50 text-xs leading-tight mt-0.5">
-                Capture moments with filters &amp; post
-              </p>
-            </div>
-            <Button
-              data-ocid="upload.take_photo_button"
-              onClick={() =>
-                navigate({ to: "/camera", search: { mode: "photo" } })
-              }
-              size="sm"
-              className="shrink-0 font-semibold text-white border-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, oklch(0.55 0.22 150), oklch(0.5 0.2 165))",
-              }}
-            >
-              Take Photo →
-            </Button>
-          </div>
-        </motion.div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-white/10" />
-          <span className="text-white/30 text-xs font-medium">
-            or upload a file
-          </span>
-          <div className="flex-1 h-px bg-white/10" />
-        </div>
-
-        {/* Video upload zone */}
-        {!videoPreviewUrl ? (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            data-ocid="upload.dropzone"
-            className={`relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer transition-all ${
-              dragOver
-                ? "border-reels-pink bg-reels-pink/10"
-                : "border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/8"
-            }`}
-            style={{ minHeight: 220 }}
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-          >
-            <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
-              <Film className="w-8 h-8 text-white/50" />
-            </div>
-            <div className="text-center">
-              <p className="text-white font-semibold">Tap to select video</p>
-              <p className="text-white/40 text-sm mt-1">
-                or drag and drop here
-              </p>
-              <p className="text-white/30 text-xs mt-2">
-                MP4, MOV, WebM · Max {MAX_VIDEO_SIZE_MB}MB
-              </p>
-            </div>
-            <div className="flex items-center gap-2 bg-reels-pink/20 border border-reels-pink/40 rounded-full px-4 py-2">
-              <Upload className="w-4 h-4 text-reels-pink" />
-              <span className="text-reels-pink text-sm font-semibold">
-                Choose File
-              </span>
-            </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileSelect(file);
-                // Reset input so same file can be re-selected
-                e.target.value = "";
-              }}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative rounded-2xl overflow-hidden bg-black"
-          >
-            <video
-              src={videoPreviewUrl}
-              className="w-full rounded-2xl"
-              style={{ maxHeight: 280, objectFit: "contain" }}
-              controls
-              playsInline
-            >
-              <track kind="captions" />
-            </video>
-            <button
-              type="button"
-              onClick={handleClear}
-              className="absolute top-3 right-3 w-8 h-8 bg-black/70 rounded-full flex items-center justify-center text-white hover:bg-black/90 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            {videoFile && (
-              <div className="absolute bottom-3 left-3 glass-card px-3 py-1 rounded-full">
-                <p className="text-white text-xs">{videoFile.name}</p>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* Photo upload section */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-white/10" />
-          <span className="text-white/30 text-xs font-medium">
-            or upload a photo
-          </span>
-          <div className="flex-1 h-px bg-white/10" />
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          data-ocid="upload.photo_dropzone"
-          className={`relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all ${
-            photoDragOver
-              ? "border-emerald-500 bg-emerald-500/10"
-              : "border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/8"
-          }`}
-          style={{ minHeight: 140 }}
-          onClick={() => photoInputRef.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setPhotoDragOver(true);
-          }}
-          onDragLeave={() => setPhotoDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setPhotoDragOver(false);
-            const file = e.dataTransfer.files[0];
-            if (file) handlePhotoSelect(file);
-          }}
-        >
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
-            <ImageIcon className="w-6 h-6 text-emerald-400" />
-          </div>
-          <div className="text-center">
-            <p className="text-white font-semibold text-sm">
-              Tap to select photo
-            </p>
-            <p className="text-white/30 text-xs mt-0.5">JPG, PNG, WEBP</p>
-          </div>
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handlePhotoSelect(file);
-            }}
-          />
-        </motion.div>
-
-        {/* Video type selector */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="space-y-2"
-        >
-          <p className="text-sm font-medium text-white/70">Video Type</p>
-          <div className="grid grid-cols-3 gap-2">
-            {VIDEO_TYPES.map((vt) => {
-              const isActive = selectedType === vt.type;
-              const isPremiumType = vt.type === "premium";
-              return (
-                <button
-                  key={vt.type}
-                  type="button"
-                  data-ocid={vt.ocid}
-                  onClick={() => setSelectedType(vt.type)}
-                  className={`relative flex flex-col items-center gap-1 rounded-xl px-3 py-3 border text-center transition-all ${
-                    isActive
-                      ? "border-transparent text-white"
-                      : "border-white/10 text-white/60 hover:border-white/20 hover:text-white/80 bg-white/5"
-                  }`}
-                  style={
-                    isActive
-                      ? {
-                          background: isPremiumType
-                            ? "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))"
-                            : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
-                        }
-                      : {}
-                  }
-                >
-                  {isPremiumType && (
-                    <Crown
-                      className={`w-3 h-3 mb-0.5 ${isActive ? "text-amber-200" : "text-amber-500/60"}`}
-                    />
-                  )}
-                  <span className="font-semibold text-sm">{vt.label}</span>
-                  <span
-                    className={`text-[10px] leading-tight text-center ${isActive ? "text-white/80" : "text-white/40"}`}
-                  >
-                    {vt.hint}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Premium subscription warning */}
-          {selectedType === "premium" &&
-            user?.subscriptionStatus !== "active" && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.2 }}
-                data-ocid="upload.error_state"
-                className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 px-3 py-2.5 mt-2"
-                style={{
-                  background:
-                    "linear-gradient(135deg, oklch(0.18 0.06 60 / 0.4), oklch(0.12 0.04 40 / 0.5))",
-                }}
-              >
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <p className="text-amber-300 text-xs leading-relaxed">
-                  Active subscription required to upload Premium content.
-                  Contact admin to activate your subscription.
-                </p>
-              </motion.div>
-            )}
-        </motion.div>
-
-        {/* Caption */}
-        <div className="space-y-2">
-          <label
-            htmlFor="caption-input"
-            className="flex items-center gap-2 text-sm font-medium text-white/70"
-          >
-            <Type className="w-4 h-4" />
-            Caption
-          </label>
-          <Textarea
-            id="caption-input"
-            data-ocid="upload.textarea"
-            placeholder="Write a caption for your reel..."
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            rows={3}
-            className="bg-white/10 border-white/20 text-white placeholder:text-white/30 resize-none text-sm"
-          />
-          <p className="text-right text-xs text-white/30">
-            {caption.length}/150
+    <>
+      <div className="h-full overflow-y-auto bg-background">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-white/10 px-4 py-4">
+          <h1 className="font-display text-xl font-bold text-white">
+            Upload Reel
+          </h1>
+          <p className="text-white/40 text-xs mt-0.5">
+            Share your moment with the world
           </p>
         </div>
 
-        {/* Hashtags */}
-        <div className="space-y-2">
-          <label
-            htmlFor="hashtag-input"
-            className="flex items-center gap-2 text-sm font-medium text-white/70"
-          >
-            <Hash className="w-4 h-4" />
-            Hashtags
-          </label>
-
-          {hashtags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {hashtags.map((tag) => (
-                <Badge
-                  key={tag}
-                  variant="secondary"
-                  className="bg-reels-pink/20 text-reels-pink border-reels-pink/30 cursor-pointer"
-                  onClick={() => setHashtags(hashtags.filter((t) => t !== tag))}
-                >
-                  #{tag} ×
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <Input
-              id="hashtag-input"
-              data-ocid="upload.search_input"
-              placeholder="Add hashtag (press Enter)"
-              value={hashtagInput}
-              onChange={(e) => setHashtagInput(e.target.value)}
-              onKeyDown={handleHashtagKeyDown}
-              className="bg-white/10 border-white/20 text-white placeholder:text-white/30 text-sm flex-1"
-            />
-            <Button
-              onClick={handleHashtagAdd}
-              variant="secondary"
-              size="sm"
-              disabled={!hashtagInput.trim()}
-              className="shrink-0 bg-white/10 hover:bg-white/20 text-white border-white/20"
-            >
-              Add
-            </Button>
-          </div>
-          <p className="text-xs text-white/30">Press Enter or comma to add</p>
-        </div>
-
-        {/* Post button */}
-        <Button
-          data-ocid="upload.submit_button"
-          onClick={handlePost}
-          disabled={
-            uploading ||
-            !videoFile ||
-            !caption.trim() ||
-            (selectedType === "premium" &&
-              user?.subscriptionStatus !== "active")
-          }
-          className="w-full h-12 font-bold text-base relative overflow-hidden"
-          style={{
-            background:
-              selectedType === "premium" &&
-              user?.subscriptionStatus !== "active"
-                ? "oklch(0.3 0.04 60)"
-                : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
-          }}
-        >
-          {/* Progress bar overlay */}
-          {uploading && uploadProgress > 0 && (
+        <div className="px-4 py-5 space-y-5 pb-24">
+          {/* Subscription expiry reminder banner */}
+          {showUploadReminder && (
             <motion.div
-              className="absolute inset-y-0 left-0 bg-white/20 rounded-lg"
-              initial={{ width: "0%" }}
-              animate={{ width: `${uploadProgress}%` }}
-              transition={{ ease: "linear" }}
-            />
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              data-ocid="upload.subscription.reminder_banner"
+              className="rounded-xl border border-amber-500/40 px-3 py-2 flex items-center gap-2"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.2 0.08 80 / 0.5), oklch(0.16 0.05 60 / 0.4))",
+              }}
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-amber-300 text-xs leading-relaxed flex-1">
+                Subscription expires in{" "}
+                <span className="font-bold">
+                  {daysLeft} day{daysLeft === 1 ? "" : "s"}
+                </span>
+                . Renew on your Profile to keep uploading.
+              </p>
+              <button
+                type="button"
+                onClick={() => setUploadReminderDismissed(true)}
+                className="text-amber-400/60 hover:text-amber-400 transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
           )}
-          {uploading ? (
-            <span className="relative flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              {uploadProgress > 0
-                ? `Uploading ${uploadProgress}%`
-                : "Uploading..."}
-            </span>
-          ) : (
-            "🚀 Post Reel"
-          )}
-        </Button>
 
-        <p className="text-center text-xs text-white/30">
-          By posting, you agree to our Community Guidelines
-        </p>
+          {/* Record with Camera CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-white/10 overflow-hidden"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.12 0.04 15 / 0.8) 0%, oklch(0.1 0.03 350 / 0.6) 100%)",
+            }}
+          >
+            <div className="flex items-center gap-4 px-4 py-4">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+                }}
+              >
+                <Camera className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-semibold text-sm">
+                  Record with Camera
+                </p>
+                <p className="text-white/50 text-xs leading-tight mt-0.5">
+                  Shoot directly in-app with effects &amp; filters
+                </p>
+              </div>
+              <Button
+                data-ocid="upload.record_camera_button"
+                onClick={() => navigate({ to: "/camera", search: {} })}
+                size="sm"
+                className="shrink-0 font-semibold text-white border-0"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+                }}
+              >
+                Record Now
+              </Button>
+            </div>
+          </motion.div>
+
+          {/* Take Photo CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="rounded-2xl border border-white/10 overflow-hidden"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.1 0.04 150 / 0.8) 0%, oklch(0.09 0.03 165 / 0.6) 100%)",
+            }}
+          >
+            <div className="flex items-center gap-4 px-4 py-4">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.55 0.22 150), oklch(0.5 0.2 165))",
+                }}
+              >
+                <ImageIcon className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-semibold text-sm">Take a Photo</p>
+                <p className="text-white/50 text-xs leading-tight mt-0.5">
+                  Capture moments with filters &amp; post
+                </p>
+              </div>
+              <Button
+                data-ocid="upload.take_photo_button"
+                onClick={() =>
+                  navigate({ to: "/camera", search: { mode: "photo" } })
+                }
+                size="sm"
+                className="shrink-0 font-semibold text-white border-0"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.55 0.22 150), oklch(0.5 0.2 165))",
+                }}
+              >
+                Take Photo →
+              </Button>
+            </div>
+          </motion.div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-white/30 text-xs font-medium">
+              or upload a file
+            </span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          {/* Video upload zone */}
+          {!videoPreviewUrl ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              data-ocid="upload.dropzone"
+              className={`relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer transition-all ${
+                dragOver
+                  ? "border-reels-pink bg-reels-pink/10"
+                  : "border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/8"
+              }`}
+              style={{ minHeight: 220 }}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            >
+              <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
+                <Film className="w-8 h-8 text-white/50" />
+              </div>
+              <div className="text-center">
+                <p className="text-white font-semibold">Tap to select video</p>
+                <p className="text-white/40 text-sm mt-1">
+                  or drag and drop here
+                </p>
+                <p className="text-white/30 text-xs mt-2">
+                  MP4, MOV, WebM · Max {MAX_VIDEO_SIZE_MB}MB
+                </p>
+              </div>
+              <div className="flex items-center gap-2 bg-reels-pink/20 border border-reels-pink/40 rounded-full px-4 py-2">
+                <Upload className="w-4 h-4 text-reels-pink" />
+                <span className="text-reels-pink text-sm font-semibold">
+                  Choose File
+                </span>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileSelect(file);
+                  // Reset input so same file can be re-selected
+                  e.target.value = "";
+                }}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative rounded-2xl overflow-hidden bg-black"
+            >
+              <video
+                src={videoPreviewUrl}
+                className="w-full rounded-2xl"
+                style={{ maxHeight: 280, objectFit: "contain" }}
+                controls
+                playsInline
+              >
+                <track kind="captions" />
+              </video>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="absolute top-3 right-3 w-8 h-8 bg-black/70 rounded-full flex items-center justify-center text-white hover:bg-black/90 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              {videoFile && (
+                <div className="absolute bottom-3 left-3 glass-card px-3 py-1 rounded-full">
+                  <p className="text-white text-xs">{videoFile.name}</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Photo upload section */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-white/30 text-xs font-medium">
+              or upload a photo
+            </span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            data-ocid="upload.photo_dropzone"
+            className={`relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all ${
+              photoDragOver
+                ? "border-emerald-500 bg-emerald-500/10"
+                : "border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/8"
+            }`}
+            style={{ minHeight: 140 }}
+            onClick={() => photoInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setPhotoDragOver(true);
+            }}
+            onDragLeave={() => setPhotoDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setPhotoDragOver(false);
+              const file = e.dataTransfer.files[0];
+              if (file) handlePhotoSelect(file);
+            }}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center">
+              <ImageIcon className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-white font-semibold text-sm">
+                Tap to select photo
+              </p>
+              <p className="text-white/30 text-xs mt-0.5">JPG, PNG, WEBP</p>
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handlePhotoSelect(file);
+              }}
+            />
+          </motion.div>
+
+          {/* Video type selector */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="space-y-2"
+          >
+            <p className="text-sm font-medium text-white/70">Video Type</p>
+            <div className="grid grid-cols-3 gap-2">
+              {VIDEO_TYPES.map((vt) => {
+                const isActive = selectedType === vt.type;
+                const isPremiumType = vt.type === "premium";
+                return (
+                  <button
+                    key={vt.type}
+                    type="button"
+                    data-ocid={vt.ocid}
+                    onClick={() => setSelectedType(vt.type)}
+                    className={`relative flex flex-col items-center gap-1 rounded-xl px-3 py-3 border text-center transition-all ${
+                      isActive
+                        ? "border-transparent text-white"
+                        : "border-white/10 text-white/60 hover:border-white/20 hover:text-white/80 bg-white/5"
+                    }`}
+                    style={
+                      isActive
+                        ? {
+                            background: isPremiumType
+                              ? "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))"
+                              : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+                          }
+                        : {}
+                    }
+                  >
+                    {isPremiumType && (
+                      <Crown
+                        className={`w-3 h-3 mb-0.5 ${isActive ? "text-amber-200" : "text-amber-500/60"}`}
+                      />
+                    )}
+                    <span className="font-semibold text-sm">{vt.label}</span>
+                    <span
+                      className={`text-[10px] leading-tight text-center ${isActive ? "text-white/80" : "text-white/40"}`}
+                    >
+                      {vt.hint}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Premium subscription warning */}
+            {selectedType === "premium" &&
+              user?.subscriptionStatus !== "active" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  data-ocid="upload.error_state"
+                  className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 px-3 py-2.5 mt-2"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.18 0.06 60 / 0.4), oklch(0.12 0.04 40 / 0.5))",
+                  }}
+                >
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-amber-300 text-xs leading-relaxed">
+                    Active subscription required to upload Premium content.
+                    Contact admin to activate your subscription.
+                  </p>
+                </motion.div>
+              )}
+          </motion.div>
+
+          {/* Caption */}
+          <div className="space-y-2">
+            <label
+              htmlFor="caption-input"
+              className="flex items-center gap-2 text-sm font-medium text-white/70"
+            >
+              <Type className="w-4 h-4" />
+              Caption
+            </label>
+            <Textarea
+              id="caption-input"
+              data-ocid="upload.textarea"
+              placeholder="Write a caption for your reel..."
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              rows={3}
+              className="bg-white/10 border-white/20 text-white placeholder:text-white/30 resize-none text-sm"
+            />
+            <p className="text-right text-xs text-white/30">
+              {caption.length}/150
+            </p>
+          </div>
+
+          {/* Hashtags */}
+          <div className="space-y-2">
+            <label
+              htmlFor="hashtag-input"
+              className="flex items-center gap-2 text-sm font-medium text-white/70"
+            >
+              <Hash className="w-4 h-4" />
+              Hashtags
+            </label>
+
+            {hashtags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {hashtags.map((tag) => (
+                  <Badge
+                    key={tag}
+                    variant="secondary"
+                    className="bg-reels-pink/20 text-reels-pink border-reels-pink/30 cursor-pointer"
+                    onClick={() =>
+                      setHashtags(hashtags.filter((t) => t !== tag))
+                    }
+                  >
+                    #{tag} ×
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Input
+                id="hashtag-input"
+                data-ocid="upload.search_input"
+                placeholder="Add hashtag (press Enter)"
+                value={hashtagInput}
+                onChange={(e) => setHashtagInput(e.target.value)}
+                onKeyDown={handleHashtagKeyDown}
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/30 text-sm flex-1"
+              />
+              <Button
+                onClick={handleHashtagAdd}
+                variant="secondary"
+                size="sm"
+                disabled={!hashtagInput.trim()}
+                className="shrink-0 bg-white/10 hover:bg-white/20 text-white border-white/20"
+              >
+                Add
+              </Button>
+            </div>
+            <p className="text-xs text-white/30">Press Enter or comma to add</p>
+          </div>
+
+          {/* Post button */}
+          <Button
+            data-ocid="upload.submit_button"
+            onClick={handlePost}
+            disabled={
+              uploading ||
+              !videoFile ||
+              !caption.trim() ||
+              (selectedType === "premium" &&
+                user?.subscriptionStatus !== "active")
+            }
+            className="w-full h-12 font-bold text-base relative overflow-hidden"
+            style={{
+              background:
+                selectedType === "premium" &&
+                user?.subscriptionStatus !== "active"
+                  ? "oklch(0.3 0.04 60)"
+                  : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+            }}
+          >
+            {/* Progress bar overlay */}
+            {uploading && uploadProgress > 0 && (
+              <motion.div
+                className="absolute inset-y-0 left-0 bg-white/20 rounded-lg"
+                initial={{ width: "0%" }}
+                animate={{ width: `${uploadProgress}%` }}
+                transition={{ ease: "linear" }}
+              />
+            )}
+            {uploading ? (
+              <span className="relative flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {uploadProgress > 0
+                  ? `Uploading ${uploadProgress}%`
+                  : "Uploading..."}
+              </span>
+            ) : (
+              "🚀 Post Reel"
+            )}
+          </Button>
+
+          <p className="text-center text-xs text-white/30">
+            By posting, you agree to our Community Guidelines
+          </p>
+        </div>
       </div>
-    </div>
+      {showPayModal && (
+        <button
+          type="button"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70"
+          onClick={() => setShowPayModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowPayModal(false);
+          }}
+          aria-label="Close modal"
+        >
+          <div className="w-full max-w-md rounded-t-3xl bg-[oklch(0.12_0.02_260)] border-t border-white/10 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg">
+                Subscribe — ₹{subPrice}/year
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPayModal(false)}
+                className="text-white/40 hover:text-white text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {!state.adminPaymentSettings ? (
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 text-amber-300 text-sm">
+                Admin has not set up payment info yet. Please contact admin at
+                support@faktahirani.app
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-3">
+                  <p className="text-white/60 text-xs uppercase tracking-wider font-medium">
+                    Payment Details
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/50 text-sm">UPI ID</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-sm font-mono">
+                        {state.adminPaymentSettings.upiId}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            state.adminPaymentSettings!.upiId,
+                          );
+                          toast.success("UPI ID copied!");
+                        }}
+                        className="text-white/40 hover:text-white"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/50 text-sm">Name</span>
+                    <span className="text-white text-sm">
+                      {state.adminPaymentSettings.upiName}
+                    </span>
+                  </div>
+                  <div className="border-t border-white/10 pt-3 space-y-2">
+                    <p className="text-white/60 text-xs">Bank Transfer</p>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/50">Bank</span>
+                      <span className="text-white">
+                        {state.adminPaymentSettings.bankName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/50">Account</span>
+                      <span className="text-white font-mono">
+                        {state.adminPaymentSettings.accountNumber}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white/50">IFSC</span>
+                      <span className="text-white font-mono">
+                        {state.adminPaymentSettings.ifsc}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-amber-300 text-xs text-center">
+                    Pay ₹{subPrice} to above details, then enter your
+                    UTR/reference below
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPayMethod("upi")}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${payMethod === "upi" ? "bg-emerald-600 text-white" : "bg-white/5 text-white/50"}`}
+                  >
+                    UPI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayMethod("bank")}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${payMethod === "bank" ? "bg-blue-600 text-white" : "bg-white/5 text-white/50"}`}
+                  >
+                    Bank Transfer
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="upload-pay-ref"
+                    className="text-white/60 text-sm"
+                  >
+                    Payment Reference / UTR Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={payRef}
+                    onChange={(e) => setPayRef(e.target.value)}
+                    id="upload-pay-ref"
+                    placeholder="Enter UTR / Transaction ID"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm outline-none focus:border-white/30"
+                    data-ocid="upload.subscription.input"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  data-ocid="upload.subscription.submit_button"
+                  onClick={handleSubmitPayment}
+                  className="w-full py-3 rounded-xl font-semibold text-sm text-white"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))",
+                  }}
+                >
+                  Submit Payment for Approval
+                </button>
+              </>
+            )}
+          </div>
+        </button>
+      )}
+    </>
   );
 }

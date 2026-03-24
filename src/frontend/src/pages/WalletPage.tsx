@@ -949,132 +949,49 @@ function TxTypeBadge({ txType }: { txType: Transaction["txType"] }) {
 // ─── Share Buttons Row ────────────────────────────────────────────────────────
 
 function ShareButtonsRow({ referralCode }: { referralCode: string }) {
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [copied, setCopied] = useState(false);
   const referralUrl = getReferralLink(referralCode);
 
-  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(
-    `खान्देशी कलाकारांसाठी Reel App. माझ्या लिंकने जॉइन करा. ${referralUrl}`,
-  )}`;
-  const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralUrl)}`;
-  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(
-    "खान्देशी कलाकारांसाठी Reel App. माझ्या लिंकने जॉइन करा.",
-  )}`;
-
-  const handleWhatsApp = () => window.open(whatsappUrl, "_blank");
-  const handleFacebook = () => window.open(facebookUrl, "_blank");
-  const handleTelegram = () => window.open(telegramUrl, "_blank");
-
-  const handleInstagram = async () => {
+  const handleShare = async () => {
     try {
-      await navigator.clipboard.writeText(referralUrl);
-      toast.success("लिंक कॉपी झाली — Instagram वर paste करा!");
+      await shareReferralLink(referralCode);
     } catch {
-      toast.error("लिंक कॉपी होऊ शकली नाही");
-    }
-  };
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(referralUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-      toast.success("रेफरल लिंक कॉपी झाली!");
-    } catch {
-      toast.error("लिंक कॉपी होऊ शकली नाही");
+      try {
+        await navigator.clipboard.writeText(referralUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success("रेफरल लिंक कॉपी झाली!");
+      } catch {
+        toast.error("लिंक कॉपी होऊ शकली नाही");
+      }
     }
   };
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-      {/* WhatsApp */}
-      <button
-        type="button"
-        data-ocid="wallet.referral.whatsapp_button"
-        onClick={handleWhatsApp}
-        className="flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 transition-all hover:scale-105 active:scale-95 border border-green-500/20"
-        style={{
-          background:
-            "linear-gradient(135deg, oklch(0.16 0.06 160), oklch(0.12 0.04 155))",
-        }}
-      >
-        <SiWhatsapp className="w-5 h-5 text-green-400" />
-        <span className="text-green-300 text-[10px] font-semibold">
-          WhatsApp
-        </span>
-      </button>
-
-      {/* Facebook */}
-      <button
-        type="button"
-        data-ocid="wallet.referral.facebook_button"
-        onClick={handleFacebook}
-        className="flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 transition-all hover:scale-105 active:scale-95 border border-blue-600/20"
-        style={{
-          background:
-            "linear-gradient(135deg, oklch(0.18 0.07 250), oklch(0.13 0.05 248))",
-        }}
-      >
-        <SiFacebook className="w-5 h-5 text-blue-400" />
-        <span className="text-blue-300 text-[10px] font-semibold">
-          Facebook
-        </span>
-      </button>
-
-      {/* Instagram */}
-      <button
-        type="button"
-        data-ocid="wallet.referral.instagram_button"
-        onClick={handleInstagram}
-        className="flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 transition-all hover:scale-105 active:scale-95 border border-pink-500/20"
-        style={{
-          background:
-            "linear-gradient(135deg, oklch(0.16 0.05 330), oklch(0.12 0.04 300))",
-        }}
-      >
-        <SiInstagram className="w-5 h-5 text-pink-400" />
-        <span className="text-pink-300 text-[10px] font-semibold">
-          Instagram
-        </span>
-      </button>
-
-      {/* Telegram */}
-      <button
-        type="button"
-        data-ocid="wallet.referral.telegram_button"
-        onClick={handleTelegram}
-        className="flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 transition-all hover:scale-105 active:scale-95 border border-blue-500/20"
-        style={{
-          background:
-            "linear-gradient(135deg, oklch(0.16 0.04 240), oklch(0.12 0.03 235))",
-        }}
-      >
-        <SiTelegram className="w-5 h-5 text-blue-400" />
-        <span className="text-blue-300 text-[10px] font-semibold">
-          Telegram
-        </span>
-      </button>
-
-      {/* Copy Link */}
-      <button
-        type="button"
-        data-ocid="wallet.referral.copy_link_button"
-        onClick={handleCopyLink}
-        className="flex flex-col items-center gap-1.5 rounded-xl py-3 px-2 transition-all hover:scale-105 active:scale-95 border border-white/15"
-        style={{
-          background:
-            "linear-gradient(135deg, oklch(0.18 0.01 0), oklch(0.13 0.01 0))",
-        }}
-      >
-        {copiedLink ? (
-          <Check className="w-5 h-5 text-green-400" />
-        ) : (
-          <Copy className="w-5 h-5 text-white/60" />
-        )}
-        <span className="text-white/60 text-[10px] font-semibold">
-          {copiedLink ? "Copied!" : "Copy Link"}
-        </span>
-      </button>
-    </div>
+    <button
+      type="button"
+      data-ocid="wallet.referral.share_button"
+      onClick={handleShare}
+      className="w-full flex items-center justify-center gap-2 rounded-xl py-3 px-4 transition-all hover:scale-105 active:scale-95 font-semibold text-sm"
+      style={{
+        background: copied
+          ? "linear-gradient(135deg, oklch(0.55 0.18 160), oklch(0.5 0.16 155))"
+          : "linear-gradient(135deg, oklch(0.65 0.28 15), oklch(0.65 0.28 350))",
+        color: "white",
+      }}
+    >
+      {copied ? (
+        <>
+          <Check className="w-4 h-4" />
+          Copied!
+        </>
+      ) : (
+        <>
+          <Share2 className="w-4 h-4" />
+          Share करा
+        </>
+      )}
+    </button>
   );
 }
 
@@ -1259,9 +1176,6 @@ function ViewerReferralDashboard() {
               </p>
               <p className="font-display font-black text-white text-xl tracking-widest truncate">
                 {user.referralCode}
-              </p>
-              <p className="text-white/25 text-[9px] font-mono truncate mt-0.5">
-                {referralUrl}
               </p>
             </div>
             <button
@@ -2824,9 +2738,6 @@ export default function WalletPage() {
                 <p className="font-display text-3xl font-bold text-white tracking-widest">
                   {user.referralCode}
                 </p>
-                <p className="text-white/30 text-[10px] font-mono break-all">
-                  {referralUrl}
-                </p>
                 <p className="text-white/40 text-xs">
                   {liveUser.role === "viewer"
                     ? "Share this code · Earn ₹5 per successful referral"
@@ -3588,9 +3499,6 @@ export default function WalletPage() {
               <div className="rounded-xl border border-dashed border-white/20 bg-white/5 p-4 text-center space-y-1">
                 <p className="font-display text-3xl font-bold text-white tracking-widest">
                   {user.referralCode}
-                </p>
-                <p className="text-white/30 text-[10px] font-mono break-all">
-                  {referralUrl}
                 </p>
                 <p className="text-white/40 text-xs">
                   {liveUser.role === "viewer"
