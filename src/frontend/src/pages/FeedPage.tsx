@@ -241,6 +241,10 @@ function ReelCard({
   const [videoLoading, setVideoLoading] = useState(true);
   const [videoUnavailable, setVideoUnavailable] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [showSubPayModal, setShowSubPayModal] = useState(false);
+  const [subPayRef, setSubPayRef] = useState("");
+  const [subPayMethod, setSubPayMethod] = useState<"upi" | "bank">("upi");
+  const [subSubmitting, setSubSubmitting] = useState(false);
   const isFollowing = useIsFollowing(video.uploaderId);
   const isCurrentUserVideo = state.currentUser?.id === video.uploaderId;
   const ocidIndex = index + 1;
@@ -629,7 +633,7 @@ function ReelCard({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                window.location.href = "/upload";
+                setShowSubPayModal(true);
               }}
               className="px-5 py-2 rounded-full text-sm font-bold text-black"
               style={{
@@ -969,6 +973,213 @@ function ReelCard({
         onOpenChange={setReportSheetOpen}
         videoId={video.id}
       />
+
+      {/* Subscription payment modal (from premium lock overlay) */}
+      {showSubPayModal && (
+        <button
+          type="button"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70"
+          onClick={() => setShowSubPayModal(false)}
+          aria-label="Close subscribe modal"
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-[oklch(0.12_0.02_260)] border-t border-white/10 p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setShowSubPayModal(false);
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg">
+                Subscribe — ₹{state.subscriptionPrice ?? 600}/year
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowSubPayModal(false)}
+                className="text-white/40 hover:text-white text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            {!state.adminPaymentSettings ? (
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4 text-amber-300 text-sm text-center">
+                Admin ने payment info अजून set नाही केली. <br />
+                <span className="text-white/50 text-xs mt-1 block">
+                  support@faktahirani.app वर संपर्क करा
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-3">
+                  <p className="text-white/60 text-xs uppercase tracking-wider font-medium">
+                    Payment Details
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/50 text-sm">UPI ID</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-sm font-mono">
+                        {state.adminPaymentSettings.upiId}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            state.adminPaymentSettings!.upiId,
+                          );
+                          toast.success("UPI ID copied!");
+                        }}
+                        className="text-white/40 hover:text-white"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  {state.adminPaymentSettings.upiName && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/50 text-sm">Name</span>
+                      <span className="text-white text-sm">
+                        {state.adminPaymentSettings.upiName}
+                      </span>
+                    </div>
+                  )}
+                  {state.adminPaymentSettings.bankName && (
+                    <div className="border-t border-white/10 pt-3 space-y-2">
+                      <p className="text-white/60 text-xs">Bank Transfer</p>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-white/50">Bank</span>
+                        <span className="text-white">
+                          {state.adminPaymentSettings.bankName}
+                        </span>
+                      </div>
+                      {state.adminPaymentSettings.accountNumber && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-white/50">Account</span>
+                          <span className="text-white font-mono">
+                            {state.adminPaymentSettings.accountNumber}
+                          </span>
+                        </div>
+                      )}
+                      {state.adminPaymentSettings.ifsc && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-white/50">IFSC</span>
+                          <span className="text-white font-mono">
+                            {state.adminPaymentSettings.ifsc}
+                          </span>
+                        </div>
+                      )}
+                      {state.adminPaymentSettings.accountHolder && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-white/50">Holder</span>
+                          <span className="text-white">
+                            {state.adminPaymentSettings.accountHolder}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-amber-300 text-xs text-center">
+                    ₹{state.subscriptionPrice ?? 600} वर pay करा, नंतर
+                    UTR/Reference number खाली भरा
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSubPayMethod("upi")}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${subPayMethod === "upi" ? "bg-emerald-600 text-white" : "bg-white/5 text-white/50"}`}
+                  >
+                    UPI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubPayMethod("bank")}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${subPayMethod === "bank" ? "bg-blue-600 text-white" : "bg-white/5 text-white/50"}`}
+                  >
+                    Bank Transfer
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="feed-sub-ref"
+                    className="text-white/60 text-sm"
+                  >
+                    Payment Reference / UTR Number *
+                  </label>
+                  <input
+                    type="text"
+                    id="feed-sub-ref"
+                    value={subPayRef}
+                    onChange={(e) => setSubPayRef(e.target.value)}
+                    placeholder="Enter UTR / Transaction ID"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm outline-none focus:border-white/30"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!subPayRef.trim()) {
+                      toast.error(
+                        "Please enter your payment reference / UTR number",
+                      );
+                      return;
+                    }
+                    if (!state.currentUser) {
+                      toast.error("Please login first");
+                      return;
+                    }
+                    setSubSubmitting(true);
+                    const req = {
+                      id: `subreq_${Date.now()}`,
+                      userId: state.currentUser.id,
+                      userName: state.currentUser.username,
+                      userEmail:
+                        state.currentUser.phone || state.currentUser.username,
+                      amount: state.subscriptionPrice ?? 600,
+                      paymentMethod: subPayMethod as "upi" | "bank",
+                      paymentReference: subPayRef.trim(),
+                      status: "pending" as const,
+                      createdAt: Date.now(),
+                    };
+                    dispatch({ type: "REQUEST_SUBSCRIPTION", request: req });
+                    setSubSubmitting(false);
+                    setShowSubPayModal(false);
+                    setSubPayRef("");
+                    toast.success(
+                      "Payment submitted! Admin will approve within 24 hours.",
+                      {
+                        description: "You'll get a notification once approved.",
+                      },
+                    );
+                  }}
+                  disabled={subSubmitting}
+                  className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-opacity disabled:opacity-50"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.55 0.18 60), oklch(0.6 0.22 40))",
+                  }}
+                >
+                  {subSubmitting
+                    ? "Submitting..."
+                    : "Submit Payment for Approval"}
+                </button>
+              </>
+            )}
+          </div>
+        </button>
+      )}
     </div>
   );
 }
@@ -1454,8 +1665,16 @@ export default function FeedPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Filter videos based on subscription status:
+  // - Subscribed users (active): see all videos
+  // - Unsubscribed artists & viewers: see only free (reel/long) videos in For You feed
+  const hasActiveSub = state.currentUser?.subscriptionStatus === "active";
+  const videosForFeed = hasActiveSub
+    ? state.videos
+    : state.videos.filter((v) => v.videoType !== "premium");
+
   const feedRaw = getTrendingFeed(
-    state.videos,
+    videosForFeed,
     state.seenVideoIds,
     state.likedVideoIds,
     state.followingIds,
